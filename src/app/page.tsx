@@ -7,14 +7,24 @@ export const fetchCache = "force-no-store";
 
 export default async function Home() {
   // Récupérer les derniers scans (historique)
-  const { data: recents } = await supabase
-    .from("cache_prix")
-    .select("ean, titre, prix, enseigne, updated_at")
-    .order("updated_at", { ascending: false })
-    .limit(5);
+  let uniqueRecents: any[] = [];
+  
+  try {
+    const { data: recents, error } = await supabase
+      .from("cache_prix")
+      .select("ean, titre, prix, enseigne, updated_at")
+      .order("updated_at", { ascending: false })
+      .limit(5);
 
-  // Dédupliquer par EAN pour n'afficher que les produits distincts
-  const uniqueRecents = recents ? Array.from(new Map(recents.map(item => [item.ean, item])).values()).slice(0, 3) : [];
+    if (error) {
+      console.error("Erreur chargement historique:", error);
+    } else if (recents) {
+      // Dédupliquer par EAN pour n'afficher que les produits distincts
+      uniqueRecents = Array.from(new Map(recents.map(item => [item.ean, item])).values()).slice(0, 3);
+    }
+  } catch (err) {
+    console.error("Exception inattendue chargement historique:", err);
+  }
 
   return (
     <main className="p-4 sm:p-6 min-h-full flex flex-col">
