@@ -5,7 +5,8 @@ import CompareButton from "@/components/CompareButton";
 import InitialProductForm from "./InitialProductForm";
 import ProductHeader from "./ProductHeader";
 
-export const revalidate = 0;
+export const dynamic = "force-dynamic";
+export const fetchCache = "force-no-store";
 
 export default async function ProductPage({
   params,

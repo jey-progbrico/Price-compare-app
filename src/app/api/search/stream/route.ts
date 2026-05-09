@@ -1,6 +1,8 @@
 import { processScrapingQueue } from "@/lib/scraper/queue";
 import { supabase } from "@/lib/supabase";
 
+export const dynamic = "force-dynamic";
+
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const ean = searchParams.get("ean");

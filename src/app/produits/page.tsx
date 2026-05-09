@@ -2,7 +2,8 @@ import { supabase } from "@/lib/supabase";
 import ProductListClient from "./ProductListClient";
 import { Package } from "lucide-react";
 
-export const revalidate = 0;
+export const dynamic = "force-dynamic";
+export const fetchCache = "force-no-store";
 
 export default async function ProduitsPage() {
   const { data: produits } = await supabase

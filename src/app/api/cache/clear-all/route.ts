@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 
+export const dynamic = "force-dynamic";
+
 export async function DELETE() {
   try {
     // Supprimer toutes les entrées où l'ID n'est pas nul (c'est-à-dire toute la table)

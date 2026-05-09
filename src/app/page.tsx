@@ -2,7 +2,8 @@ import { supabase } from "@/lib/supabase";
 import Link from "next/link";
 import { Search, ScanBarcode, Clock, ArrowRight } from "lucide-react";
 
-export const revalidate = 0;
+export const dynamic = "force-dynamic";
+export const fetchCache = "force-no-store";
 
 export default async function Home() {
   // Récupérer les derniers scans (historique)

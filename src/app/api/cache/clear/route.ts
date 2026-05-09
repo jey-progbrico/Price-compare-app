@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
+export const dynamic = "force-dynamic";
+
 export async function DELETE(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
