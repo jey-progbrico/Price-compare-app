@@ -8,6 +8,7 @@ export const fetchCache = "force-no-store";
 export default async function Home() {
   // Récupérer les derniers scans (historique)
   let uniqueRecents: any[] = [];
+  let supabaseError = null;
   
   try {
     const { data: recents, error } = await supabase
@@ -18,14 +19,15 @@ export default async function Home() {
 
     if (error) {
       console.error("Erreur chargement historique:", error);
+      supabaseError = error.message;
     } else if (recents) {
       // Dédupliquer par EAN pour n'afficher que les produits distincts
       uniqueRecents = Array.from(new Map(recents.map(item => [item.ean, item])).values()).slice(0, 3);
     }
-  } catch (err) {
+  } catch (err: any) {
     console.error("Exception inattendue chargement historique:", err);
+    supabaseError = err.message || "Erreur technique Supabase";
   }
-
   return (
     <main className="p-4 sm:p-6 min-h-full flex flex-col">
       {/* Header Mobile */}
@@ -57,6 +59,13 @@ export default async function Home() {
         {/* On peut mettre un link vers # car le scan est géré par la BottomNav, mais on pourrait aussi faire un state global ou juste indiquer de cliquer en bas */}
         <p className="mt-6 text-xs font-bold text-red-500 uppercase tracking-wider">↓ Utilisez le bouton central ↓</p>
       </div>
+
+      {supabaseError && (
+        <div className="mb-8 p-4 bg-red-900/20 border border-red-500/50 rounded-2xl">
+          <h3 className="text-red-500 font-bold mb-1 text-sm">Erreur Supabase Critique</h3>
+          <p className="text-xs text-red-400 font-mono break-all">{supabaseError}</p>
+        </div>
+      )}
 
       {/* Historique Récent */}
       <div className="mb-4">

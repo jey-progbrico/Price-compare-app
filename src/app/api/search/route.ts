@@ -1,63 +1,72 @@
 import { NextResponse } from "next/server";
-import { processScrapingQueue } from "@/lib/scraper/queue";
+import { runSearch } from "@/lib/search/searchOrchestrator";
 import { supabase } from "@/lib/supabase";
+import type { ProductInfo } from "@/lib/search/types";
 
 export const dynamic = "force-dynamic";
 
+/**
+ * GET /api/search?ean=XXX
+ *
+ * Endpoint REST (non-SSE) pour les cas où EventSource n'est pas disponible.
+ * Retourne tous les résultats en une seule réponse JSON.
+ */
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const ean = searchParams.get("ean");
+  const forceRefresh = searchParams.get("force") === "1";
 
   if (!ean) {
     return NextResponse.json({ error: "EAN manquant" }, { status: 400 });
   }
 
   try {
-    // 1. Récupérer les infos du produit pour la recherche sémantique
-    const { data: produit } = await supabase
-      .from("produits")
-      .select("marque, description_produit")
-      .eq("numero_ean", ean)
-      .single();
+    // 1. Récupérer les infos produit
+    let product: ProductInfo = { ean };
 
-    const productInfos = produit ? {
-      marque: produit.marque,
-      designation: produit.description_produit
-    } : undefined;
+    try {
+      const { data: produit } = await supabase
+        .from("produits")
+        .select("marque, description_produit, reference_fabricant")
+        .eq("numero_ean", ean)
+        .single();
 
-    // 2. Exécution de la file d'attente intelligente (Parallèle + Cascade)
-    const { results, debugLogs } = await processScrapingQueue(ean, productInfos);
+      if (produit) {
+        product = {
+          ean,
+          marque: produit.marque ?? null,
+          designation: produit.description_produit ?? null,
+          reference_fabricant: produit.reference_fabricant ?? null,
+        };
+      }
+    } catch (dbErr: any) {
+      console.warn("[Search] Impossible de charger les infos produit:", dbErr.message);
+    }
 
-    // On ne renvoie que les résultats pertinents au frontend
+    // 2. Recherche complète
+    const { results, stats } = await runSearch(product, {
+      force_refresh: forceRefresh,
+    });
+
+    // 3. Filtrer et formater la réponse
     const finalResults = results
-      .filter(r => r.statut === "success" && r.prix !== null)
+      .filter(r => r.prix !== null && r.prix > 0)
       .map(r => ({
         enseigne: r.enseigne,
         titre: r.titre,
         prix: r.prix,
         lien: r.lien,
-        isCached: (r as any).isCached || false, // Info pour l'UI
-        prix_precedent: (r as any).prix_precedent || null,
-        date_changement_prix: (r as any).date_changement_prix || null
+        source: r.source,
+        image_url: r.image_url ?? null,
+        isCached: r.source === "cache",
+        prix_precedent: r.prix_precedent ?? null,
+        date_changement_prix: r.date_changement_prix ?? null,
+        relevance_score: r.relevance_score ?? null,
       }));
 
-    // S'il n'y a aucun succès mais qu'il y a des erreurs de proxy
-    if (finalResults.length === 0) {
-      const proxyNeeded = results.some(r => r.statut === "403_proxy_needed");
-      if (proxyNeeded) {
-        return NextResponse.json(
-          { 
-            results: [], 
-            warning: "Certains sites (Leroy Merlin, Bricoman) bloquent l'accès sans Proxy.",
-            debugLogs
-          }
-        );
-      }
-    }
-
-    return NextResponse.json({ results: finalResults, debugLogs });
+    return NextResponse.json({ results: finalResults, stats });
   } catch (error: any) {
-    console.error("Erreur Scraping:", error);
+    console.error("[Search] Erreur:", error.message);
     return NextResponse.json(
       { error: "Impossible de récupérer les prix concurrents" },
       { status: 500 }

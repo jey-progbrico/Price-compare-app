@@ -1,37 +1,77 @@
 import { NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase";
+import { checkCache, getStaleResults } from "@/lib/search/cacheManager";
 
 export const dynamic = "force-dynamic";
 
+const DEFAULT_TTL_HOURS = parseInt(process.env.CACHE_TTL_HOURS || "168");
+
+/**
+ * GET /api/cache?ean=XXX
+ *
+ * Retourne les résultats en cache pour un EAN.
+ * Utilisé par le composant CompareButton au montage pour l'affichage immédiat.
+ *
+ * Query params :
+ *   ean    - EAN du produit (obligatoire)
+ *   stale  - "1" pour inclure les résultats expirés (affichage immédiat)
+ */
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const ean = searchParams.get("ean");
+  const includeStale = searchParams.get("stale") === "1";
 
   if (!ean) {
     return NextResponse.json({ error: "EAN manquant" }, { status: 400 });
   }
 
   try {
-    const { data: cached } = await supabase.from('cache_prix').select('*').eq('ean', ean);
-    
-    if (!cached || cached.length === 0) {
-      return NextResponse.json({ results: [] });
+    // D'abord les résultats valides
+    const validResults = await checkCache(ean, DEFAULT_TTL_HOURS);
+
+    if (validResults.length > 0) {
+      const results = validResults.map(r => ({
+        enseigne: r.enseigne,
+        titre: r.titre,
+        prix: r.prix,
+        lien: r.lien,
+        source: r.source,
+        image_url: r.image_url ?? null,
+        isCached: true,
+        isStale: false,
+        prix_precedent: r.prix_precedent ?? null,
+        date_changement_prix: r.date_changement_prix ?? null,
+        retrieved_at: r.retrieved_at,
+      }));
+
+      return NextResponse.json({ results, ttl_hours: DEFAULT_TTL_HOURS });
     }
 
-    const results = cached.map(c => ({
-      enseigne: c.enseigne,
-      titre: c.titre,
-      prix: c.prix,
-      lien: c.lien,
-      isCached: true,
-      statut: "success",
-      prix_precedent: c.prix_precedent,
-      date_changement_prix: c.date_changement_prix
-    }));
+    // Si demandé, inclure les résultats expirés (stale)
+    if (includeStale) {
+      const staleResults = await getStaleResults(ean);
+      const results = staleResults.map(r => ({
+        enseigne: r.enseigne,
+        titre: r.titre,
+        prix: r.prix,
+        lien: r.lien,
+        source: r.source,
+        image_url: r.image_url ?? null,
+        isCached: true,
+        isStale: true,
+        prix_precedent: r.prix_precedent ?? null,
+        date_changement_prix: r.date_changement_prix ?? null,
+        retrieved_at: r.retrieved_at,
+      }));
 
-    return NextResponse.json({ results });
+      return NextResponse.json({ results, ttl_hours: DEFAULT_TTL_HOURS });
+    }
+
+    return NextResponse.json({ results: [], ttl_hours: DEFAULT_TTL_HOURS });
   } catch (error: any) {
-    console.error("Erreur Cache:", error);
-    return NextResponse.json({ error: "Impossible de récupérer le cache" }, { status: 500 });
+    console.error("[Cache] Erreur:", error.message);
+    return NextResponse.json(
+      { error: "Impossible de récupérer le cache" },
+      { status: 500 }
+    );
   }
 }
