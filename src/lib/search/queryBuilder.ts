@@ -86,18 +86,27 @@ export function buildSearchQueries(product: ProductInfo): SearchQuery[] {
   // ─── PRIORITÉ 2 : EAN seul ───────────────────────────────────────────────
   // L'EAN est le plus unique et précis pour identifier un produit exact
   queries.push({
-    query: ean,
+    query: `"${ean}" -inurl:search -inurl:recherche -inurl:catalogsearch`,
     priority: 2,
     type: "ean",
     description: `EAN: ${ean}`
   });
+
+  // ─── PRIORITÉ 2B : EAN + prix ───────────────────────────────
+
+queries.push({
+  query: `"${ean}" prix -inurl:search -inurl:recherche`,
+  priority: 2,
+  type: "ean",
+  description: `EAN + prix: ${ean}`
+});
 
   // ─── PRIORITÉ 3 : Marque + Désignation simplifiée ────────────────────────
   if (cleanMarque && cleanDesig) {
     const keywords = extractKeywords(cleanDesig);
     if (keywords) {
       queries.push({
-        query: `${cleanMarque} ${keywords}`,
+        query: `${cleanMarque} ${keywords} -inurl:search -inurl:recherche`,
         priority: 3,
         type: "mixed",
         description: `Marque + Mots-clés: ${cleanMarque} ${keywords}`
@@ -110,7 +119,7 @@ export function buildSearchQueries(product: ProductInfo): SearchQuery[] {
     const keywords = extractKeywords(cleanDesig, 4);
     if (keywords && !queries.some(q => q.query === keywords)) {
       queries.push({
-        query: keywords,
+        query: `${keywords} -inurl:search -inurl:recherche`,
         priority: 4,
         type: "designation",
         description: `Mots-clés désignation: ${keywords}`

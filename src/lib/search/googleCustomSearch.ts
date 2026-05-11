@@ -176,6 +176,67 @@ function extractEnseigne(displayLink: string): string {
     "acova.fr": "Acova",
     "thermor.fr": "Thermor",
     "atlantic.fr": "Atlantic",
+    "domomat.com": "Domomat",
+    "domomat.com": "Domomat",
+    "materielelectrique.com": "Materiel Electrique",
+    "toolstation.fr": "Toolstation",
+    "legallais.com": "Legallais",
+    "maxoutil.com": "Maxoutil",
+    "quincaillerie.pro": "Quincaillerie Pro",
+    "racetools.fr": "Racetools",
+    "champion-direct.com": "Champion Direct",
+    "manutan.fr": "Manutan",
+    "setin.fr": "Setin",
+    "prolians.fr": "Prolians",
+    "foussier.fr": "Foussier",
+    "otelo.fr": "Otelo",
+    "batiramax.com": "Batiramax",
+    "elec44.fr": "Elec44",
+    "bis-electric.com": "BIS Electric",
+    "elecdirect.fr": "ElecDirect",
+    "cdiscount.com": "Cdiscount",
+    "rakuten.fr": "Rakuten",
+    "baudelet-materiels.fr": "Baudelet Materiels",
+    "cazabox.com": "Cazabox",
+    "clickoutil.com": "ClickOutil",
+    "cotebrico.fr": "Cote Brico",
+    "debonix.fr": "Debonix",
+    "directomat.com": "Directomat",
+    "edisline.com": "Edisline",
+    "espinosa.fr": "Espinosa",
+    "fixami.fr": "Fixami",
+    "guedo-outillage.fr": "Guedo Outillage",
+    "master-outillage.com": "Master Outillage",
+    "monmagasingeneral.com": "Mon Magasin General",
+    "motoblouz.com": "Motoblouz",
+    "mytoolstore.fr": "MyToolStore",
+    "quofi.fr": "Quofi",
+    "servitech.fr": "Servitech",
+    "sobrico.com": "Sobrico",
+    "univers-du-pro.com": "Univers du Pro",
+    "u-power.fr": "U Power",
+    "worken.fr": "Worken",
+    "comptoirdespros.com": "Comptoir des Pros",
+    "allo-reseau.com": "Allo Reseau",
+    "cablematic.fr": "Cablematic",
+    "eplanetelec.fr": "E Planetelec",
+    "electissime.fr": "Electissime",
+    "one-elec.com": "One Elec",
+    "red-distribution.fr": "Red Distribution",
+    "vente-unique.com": "Vente Unique",
+    "bricoprive.com": "Brico Prive",
+    "discountandquality.com": "Discount and Quality",
+    "kamody.fr": "Kamody",
+    "ubuy.fr": "UBuy",
+    "manubricole.com": "Manubricole",
+    "mesmateriaux.com": "Mes Materiaux",
+    "idf-materiaux.com": "IDF Materiaux",
+    "bati-avenue.com": "Bati Avenue",
+    "monbatiment.fr": "Mon Batiment",
+    "afdb.fr": "AFDB",
+    "afz-outillage.fr": "AFZ Outillage",
+    "entrepot-du-bricolage.fr": "Entrepôt du Bricolage",
+    "gedimat.fr": "Gedimat"
   };
 
   const hostname = displayLink
@@ -204,6 +265,11 @@ export async function searchGoogleCSE(
   query: string,
   product: ProductInfo
 ): Promise<SearchResult[]> {
+
+console.log("[GoogleCSE] START");
+console.log("[GoogleCSE] KEY:", GOOGLE_CSE_KEY?.slice(0, 10));
+console.log("[GoogleCSE] CX:", GOOGLE_CSE_ID);
+
   if (!GOOGLE_CSE_KEY || !GOOGLE_CSE_ID) {
     console.error("[GoogleCSE] Clés API manquantes (GOOGLE_CSE_KEY, GOOGLE_CSE_ID)");
     return [];
@@ -218,6 +284,7 @@ export async function searchGoogleCSE(
   url.searchParams.set("hl", "fr");    // Langue interface française
 
   console.log(`[GoogleCSE] Recherche: "${query}"`);
+  console.log("[GoogleCSE] URL:", url.toString());
 
   let response: Response;
   try {
@@ -272,13 +339,38 @@ export async function searchGoogleCSE(
     const enseigne = extractEnseigne(item.displayLink);
     const titre = item.title || "";
 
+    const link = item.link?.toLowerCase() || "";
+
+const badPatterns = [
+  "/search",
+  "?q=",
+  "/recherche",
+  "/catalogsearch",
+  "/search?",
+  "/s?",
+  "results",
+];
+
+const isSearchPage = badPatterns.some(pattern =>
+  link.includes(pattern)
+);
+
+if (isSearchPage) {
+  console.log("[GoogleCSE] Search page ignored:", link);
+  continue;
+}
+
     // Calcul du score de pertinence
     const score = calculateRelevanceScore(titre, product);
 
     // Rejeter uniquement les résultats vraiment hors-sujet (score très bas)
     // On est plus permissif sur les résultats sans prix (score min = 15)
-    const minScore = prix_status === "detected" ? MIN_RELEVANCE_SCORE : Math.max(15, MIN_RELEVANCE_SCORE - 10);
-    if (score < minScore) {
+    const minScore = 5
+ 
+     console.log(
+  `[GoogleCSE] ${enseigne} | score=${score} | prix=${prix} | ${titre}`
+);
+    if (score < minScore && prix !== null) {
       console.log(`[GoogleCSE] Rejeté (score ${score}%, min ${minScore}%): ${titre.substring(0, 60)}`);
       continue;
     }

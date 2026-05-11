@@ -103,9 +103,7 @@ export async function runSearch(
       stats.duration_ms = Date.now() - startTime;
       stats.sources_tried.push("cache");
       stats.sources_success.push("cache");
-
-      emit({ type: "done", results: allResults, stats });
-      return { results: allResults, stats };
+    
     }
 
     // Résultats stale (expirés mais disponibles) → affichage immédiat + recherche live
