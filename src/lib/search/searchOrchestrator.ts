@@ -127,6 +127,7 @@ export async function runSearch(
   stats.sources_tried.push("google_cse");
 
   let googleResults: SearchResult[] = [];
+  let googleBlocked = false; // 403 API → on le signale mais on continue
 
   if (isGoogleCSEConfigured()) {
     try {
@@ -134,17 +135,13 @@ export async function runSearch(
         product,
         FALLBACK_THRESHOLD,
         (partialResults, queryIndex) => {
-          // Émettre les résultats progressivement
-          const newResults = partialResults.slice(
-            googleResults.length // Uniquement les nouveaux
-          );
+          const newResults = partialResults.slice(googleResults.length);
           for (const r of newResults) {
             emit({ type: "source_result", source: "google_cse", result: r });
           }
         }
       );
 
-      // Émettre les résultats qui n'ont pas encore été émis via le callback
       for (const r of googleResults) {
         emit({ type: "source_result", source: "google_cse", result: r });
       }
@@ -160,28 +157,48 @@ export async function runSearch(
         status: googleResults.length > 0 ? "success" : "not_found",
       });
     } catch (err: any) {
-      console.error("[Orchestrator] Google CSE error:", err.message);
-      emit({ type: "source_end", source: "google_cse", status: "error" });
+      const isBlocked = err.message?.includes("403") ||
+                        err.message?.includes("PERMISSION_DENIED") ||
+                        err.message?.includes("forbidden");
+      googleBlocked = isBlocked;
+      console.error(`[Orchestrator] Google CSE ${isBlocked ? "BLOQUÉ (403)" : "erreur"}: ${err.message}`);
+      emit({
+        type: "source_end",
+        source: "google_cse",
+        status: isBlocked ? "blocked" : "error",
+      });
     }
   } else {
-    console.warn("[Orchestrator] Google CSE non configuré — passage direct aux scrapers fallback");
+    console.warn("[Orchestrator] Google CSE non configuré — scrapers fallback comme moteur principal");
     emit({ type: "source_end", source: "google_cse", status: "skipped" });
   }
 
   allResults.push(...googleResults);
 
-  // ─── ÉTAPE 3 : Scrapers fallback (si peu de résultats) ──────────────────
+  // ─── ÉTAPE 3 : Scrapers fallback ─────────────────────────────────────────
+  // Déclenché si : peu de résultats OU si Google CSE est bloqué/indispo
 
-  const needsFallback = allResults.length < FALLBACK_THRESHOLD;
+  const needsFallback = allResults.length < FALLBACK_THRESHOLD || googleBlocked;
 
   if (needsFallback) {
     console.log(
-      `[Orchestrator] ${allResults.length} résultats — déclenchement fallback scrapers`
+      `[Orchestrator] Déclenchement scrapers fallback ` +
+      `(résultats: ${allResults.length}, CSE bloqué: ${googleBlocked})`
     );
 
-    // Meilleure requête pour les scrapers : priorité à la ref fabricant
+    // Meilleure requête pour les scrapers :
+    // Priorité : désignation enrichie > ref fabricant > EAN
+    // (éviter l'EAN brut qui donne peu de résultats sur les sites marchands)
     const queries = buildSearchQueries(product);
-    const bestQuery = queries[0]?.query || product.ean;
+    const bestQuery = (
+      queries.find(q => q.type === "mixed")?.query ||
+      queries.find(q => q.type === "ref_fabricant")?.query ||
+      queries.find(q => q.type === "designation")?.query ||
+      // Fallback final : désignation simplifiée si pas d'autre option
+      (product.marque && product.designation
+        ? `${product.marque} ${product.designation.split(" ").slice(0, 4).join(" ")}`
+        : product.ean)
+    );
 
     const scraperSources = ["scraper_123elec", "scraper_manomano", "scraper_bricozor", "scraper_amazon"];
     for (const src of scraperSources) {

@@ -13,6 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 import BottomNav from "@/components/BottomNav";
+import ToastContainer from "@/components/Toast";
 
 export const metadata: Metadata = {
   title: "Vigiprix : Scan & Comparaison",
@@ -42,6 +43,7 @@ export default function RootLayout({
           {children}
         </main>
         <BottomNav />
+        <ToastContainer />
       </body>
     </html>
   );
