@@ -6,7 +6,6 @@ import {
   Search,
   Database,
   Zap,
-  Wrench,
   AlertTriangle,
   CheckCircle2,
   Loader2,
@@ -16,6 +15,9 @@ import {
   Clock,
   ChevronDown,
   ChevronUp,
+  Tag,
+  Link2,
+  PenLine,
 } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -24,6 +26,7 @@ interface SearchResult {
   enseigne: string;
   titre: string;
   prix: number | null;
+  prix_status?: "detected" | "not_found" | "manual";
   lien: string;
   source?: string;
   image_url?: string | null;
@@ -45,13 +48,13 @@ interface SourceState {
 
 // ─── Config sources ───────────────────────────────────────────────────────────
 
-const SOURCES_CONFIG: Record<string, { label: string; icon: "google" | "scraper" | "cache" }> = {
-  cache: { label: "Cache", icon: "cache" },
-  google_cse: { label: "Google Shopping", icon: "google" },
-  scraper_123elec: { label: "123elec", icon: "scraper" },
-  scraper_manomano: { label: "ManoMano", icon: "scraper" },
-  scraper_bricozor: { label: "Bricozor", icon: "scraper" },
-  scraper_amazon: { label: "Amazon", icon: "scraper" },
+const SOURCES_CONFIG: Record<string, { label: string }> = {
+  cache: { label: "Cache" },
+  google_cse: { label: "Google Web" },
+  scraper_123elec: { label: "123elec" },
+  scraper_manomano: { label: "ManoMano" },
+  scraper_bricozor: { label: "Bricozor" },
+  scraper_amazon: { label: "Amazon" },
 };
 
 // ─── Couleurs par enseigne ────────────────────────────────────────────────────
@@ -63,7 +66,10 @@ const ENSEIGNE_COLORS: Record<string, string> = {
   "Bricozor": "#2563EB",
   "Leroy Merlin": "#78AF00",
   "Castorama": "#FF6B00",
-  "Google": "#4285F4",
+  "Brico Dépôt": "#FFA500",
+  "Cdiscount": "#E2001A",
+  "Darty": "#E3001B",
+  "Fnac": "#F7941D",
 };
 
 function getEnseigneColor(enseigne: string): string {
@@ -75,11 +81,10 @@ function getEnseigneColor(enseigne: string): string {
 function SkeletonCard() {
   return (
     <div className="bg-[#111] rounded-2xl p-4 border border-neutral-800/60 flex gap-3 items-center animate-pulse">
-      <div className="w-14 h-14 rounded-xl bg-neutral-800 flex-shrink-0" />
+      <div className="w-12 h-12 rounded-xl bg-neutral-800 flex-shrink-0" />
       <div className="flex-1 space-y-2">
         <div className="h-3 bg-neutral-800 rounded w-20" />
         <div className="h-4 bg-neutral-800 rounded w-full" />
-        <div className="h-3 bg-neutral-800 rounded w-2/3" />
         <div className="h-6 bg-neutral-800 rounded w-24 mt-1" />
       </div>
     </div>
@@ -118,54 +123,17 @@ function SourceBadge({ source, status }: { source: string; status: SourceStatus 
   );
 }
 
-function ResultBadge({ source, isStale }: { source?: string; isStale?: boolean }) {
-  if (isStale) {
-    return (
-      <span className="text-[9px] bg-amber-900/40 text-amber-400 border border-amber-800/50 px-1.5 py-0.5 rounded-md font-bold uppercase tracking-wider flex items-center gap-1">
-        <Clock className="w-2.5 h-2.5" />
-        Expiré
-      </span>
-    );
-  }
-  if (source === "cache") {
-    return (
-      <span className="text-[9px] bg-neutral-800 text-neutral-400 border border-neutral-700 px-1.5 py-0.5 rounded-md font-bold uppercase tracking-wider flex items-center gap-1">
-        <Database className="w-2.5 h-2.5" />
-        Cache
-      </span>
-    );
-  }
-  if (source === "google_cse") {
-    return (
-      <span className="text-[9px] bg-blue-900/40 text-blue-400 border border-blue-800/50 px-1.5 py-0.5 rounded-md font-bold uppercase tracking-wider flex items-center gap-1">
-        <Zap className="w-2.5 h-2.5" />
-        Live
-      </span>
-    );
-  }
-  if (source?.startsWith("scraper_")) {
-    return (
-      <span className="text-[9px] bg-purple-900/40 text-purple-400 border border-purple-800/50 px-1.5 py-0.5 rounded-md font-bold uppercase tracking-wider flex items-center gap-1">
-        <Wrench className="w-2.5 h-2.5" />
-        Scraping
-      </span>
-    );
-  }
-  return null;
-}
-
 function PriceDisplay({ prix, prix_precedent, internalPrice }: {
   prix: number;
   prix_precedent?: number | null;
   internalPrice?: number | null;
 }) {
   const hasDropped = prix_precedent && prix < prix_precedent;
-  const hasRisen = prix_precedent && prix > prix_precedent;
   const isCheaper = internalPrice && prix > 0 && prix < internalPrice;
 
   return (
-    <div className="flex items-center gap-2 mt-2 flex-wrap">
-      <span className="text-2xl font-black text-white leading-none tabular-nums">
+    <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+      <span className="text-xl font-black text-white leading-none tabular-nums">
         {prix.toFixed(2)}€
       </span>
 
@@ -189,16 +157,156 @@ function PriceDisplay({ prix, prix_precedent, internalPrice }: {
   );
 }
 
+// ─── Carte résultat avec prix ─────────────────────────────────────────────────
+
+function PriceResultCard({ res, index, internalPrice }: {
+  res: SearchResult;
+  index: number;
+  internalPrice?: number | null;
+}) {
+  const prix = res.prix!;
+  const color = getEnseigneColor(res.enseigne);
+
+  return (
+    <a
+      href={res.lien}
+      target="_blank"
+      rel="noopener noreferrer"
+      style={{ animationDelay: `${index * 60}ms`, animationFillMode: "both" }}
+      className="group bg-[#0e0e0e] rounded-2xl p-3.5 border border-neutral-800/70
+                 flex gap-3 items-start
+                 hover:border-neutral-600 hover:bg-[#141414]
+                 transition-all duration-200
+                 animate-in fade-in slide-in-from-bottom-2"
+    >
+      {/* Logo enseigne */}
+      <div
+        className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 text-lg font-black border"
+        style={{
+          backgroundColor: `${color}18`,
+          borderColor: `${color}35`,
+          color,
+        }}
+      >
+        {res.image_url ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={res.image_url}
+            alt={res.enseigne}
+            className="w-full h-full object-contain rounded-xl p-1"
+            onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+          />
+        ) : (
+          res.enseigne.charAt(0)
+        )}
+      </div>
+
+      {/* Contenu */}
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2 mb-0.5 flex-wrap">
+          <span className="text-[11px] font-bold uppercase tracking-wider" style={{ color }}>
+            {res.enseigne}
+          </span>
+          {res.prix_status === "manual" && (
+            <span className="text-[9px] bg-violet-900/40 text-violet-400 border border-violet-800/50 px-1.5 py-0.5 rounded-md font-bold uppercase tracking-wider flex items-center gap-1">
+              <PenLine className="w-2.5 h-2.5" />
+              Manuel
+            </span>
+          )}
+          {res.source === "cache" && (
+            <span className="text-[9px] bg-neutral-800 text-neutral-400 border border-neutral-700 px-1.5 py-0.5 rounded-md font-bold uppercase tracking-wider flex items-center gap-1">
+              <Database className="w-2.5 h-2.5" />
+              Cache
+            </span>
+          )}
+        </div>
+        <p className="text-white/80 text-xs leading-snug line-clamp-1 mb-0.5">
+          {res.titre || "Produit"}
+        </p>
+        <PriceDisplay prix={prix} prix_precedent={res.prix_precedent} internalPrice={internalPrice} />
+      </div>
+
+      <ExternalLink className="w-3.5 h-3.5 text-neutral-700 group-hover:text-neutral-400 transition-colors flex-shrink-0 mt-1" />
+    </a>
+  );
+}
+
+// ─── Carte lien sans prix ─────────────────────────────────────────────────────
+
+function LinkOnlyCard({ res, index, onAddPrice }: {
+  res: SearchResult;
+  index: number;
+  onAddPrice: (enseigne: string, lien: string, titre: string) => void;
+}) {
+  const color = getEnseigneColor(res.enseigne);
+
+  return (
+    <div
+      style={{ animationDelay: `${index * 60}ms`, animationFillMode: "both" }}
+      className="bg-[#0a0a0a] rounded-xl p-3 border border-neutral-800/40
+                 flex gap-3 items-center
+                 animate-in fade-in slide-in-from-bottom-2"
+    >
+      {/* Logo enseigne */}
+      <div
+        className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 text-sm font-black border opacity-70"
+        style={{
+          backgroundColor: `${color}10`,
+          borderColor: `${color}25`,
+          color,
+        }}
+      >
+        {res.enseigne.charAt(0)}
+      </div>
+
+      {/* Contenu */}
+      <div className="flex-1 min-w-0">
+        <span className="text-[11px] font-bold uppercase tracking-wider block" style={{ color }}>
+          {res.enseigne}
+        </span>
+        <span className="text-[10px] text-neutral-600 flex items-center gap-1 mt-0.5">
+          <Tag className="w-2.5 h-2.5" />
+          Prix non détecté automatiquement
+        </span>
+      </div>
+
+      {/* Actions */}
+      <div className="flex items-center gap-1.5 flex-shrink-0">
+        <a
+          href={res.lien}
+          target="_blank"
+          rel="noopener noreferrer"
+          title="Ouvrir le site"
+          className="p-1.5 bg-neutral-900 border border-neutral-800 rounded-lg text-neutral-500
+                     hover:text-white hover:border-neutral-700 transition-all"
+        >
+          <ExternalLink className="w-3 h-3" />
+        </a>
+        <button
+          onClick={() => onAddPrice(res.enseigne, res.lien, res.titre)}
+          title="Ajouter le prix manuellement"
+          className="p-1.5 bg-neutral-900 border border-neutral-800 rounded-lg text-neutral-500
+                     hover:text-violet-400 hover:border-violet-800/60 transition-all"
+        >
+          <PenLine className="w-3 h-3" />
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ─── Composant principal ──────────────────────────────────────────────────────
 
 export default function CompareButton({
   ean,
   internalPrice,
   isUnknown,
+  onManualPriceClick,
 }: {
   ean: string;
   internalPrice?: number | null;
   isUnknown: boolean;
+  onManualPriceClick?: (enseigne: string, lien: string, titre: string) => void;
 }) {
   const [phase, setPhase] = useState<"idle" | "cache_check" | "searching" | "done">("cache_check");
   const [results, setResults] = useState<SearchResult[]>([]);
@@ -213,6 +321,7 @@ export default function CompareButton({
   );
   const [error, setError] = useState<string | null>(null);
   const [showSources, setShowSources] = useState(false);
+  const [showLinksOnly, setShowLinksOnly] = useState(false);
   const [clearing, setClearing] = useState(false);
   const streamRef = useRef<EventSource | null>(null);
 
@@ -263,7 +372,6 @@ export default function CompareButton({
       setHasStale(false);
     }
 
-    // Reset sources
     setSources(prev => prev.map(s => ({ ...s, status: "pending", count: 0 })));
 
     if (streamRef.current) streamRef.current.close();
@@ -272,62 +380,48 @@ export default function CompareButton({
     const eventSource = new EventSource(url);
     streamRef.current = eventSource;
 
-    // ── Résultats cache immédiats ─────────────────────────────────────────
     eventSource.addEventListener("cache_hit", (e: MessageEvent) => {
       const event = JSON.parse(e.data);
       if (event.results?.length > 0) {
-        setResults(event.results.map((r: SearchResult) => ({
-          ...r,
-          source: "cache",
-          isCached: true,
-        })));
+        setResults(event.results.map((r: SearchResult) => ({ ...r, source: "cache", isCached: true })));
         setHasStale(false);
         updateSource("cache", { status: "success", count: event.results.length });
       }
     });
 
-    // ── Source démarre ────────────────────────────────────────────────────
     eventSource.addEventListener("source_start", (e: MessageEvent) => {
       const event = JSON.parse(e.data);
       if (event.source) updateSource(event.source, { status: "running" });
     });
 
-    // ── Résultat live ─────────────────────────────────────────────────────
     eventSource.addEventListener("source_result", (e: MessageEvent) => {
       const event = JSON.parse(e.data);
       if (event.result) {
         setResults(prev => {
+          // Déduplication par enseigne
           if (prev.some(r => r.enseigne === event.result.enseigne)) return prev;
           return [...prev, event.result];
         });
         if (event.source) {
           setSources(prev =>
-            prev.map(s => s.id === event.source
-              ? { ...s, count: s.count + 1 }
-              : s
-            )
+            prev.map(s => s.id === event.source ? { ...s, count: s.count + 1 } : s)
           );
         }
       }
     });
 
-    // ── Source terminée ───────────────────────────────────────────────────
     eventSource.addEventListener("source_end", (e: MessageEvent) => {
       const event = JSON.parse(e.data);
       if (event.source) {
-        updateSource(event.source, {
-          status: event.status as SourceStatus || "not_found",
-        });
+        updateSource(event.source, { status: event.status as SourceStatus || "not_found" });
       }
     });
 
-    // ── Recherche terminée ────────────────────────────────────────────────
     eventSource.addEventListener("done", () => {
       setPhase("done");
       eventSource.close();
     });
 
-    // ── Erreur ───────────────────────────────────────────────────────────
     eventSource.addEventListener("error", (e: MessageEvent) => {
       let msg = "Erreur de connexion.";
       try {
@@ -354,18 +448,25 @@ export default function CompareButton({
     }
   };
 
+  // ─── Handler ajout prix manuel ────────────────────────────────────────────
+
+  const handleAddPrice = (enseigne: string, lien: string, titre: string) => {
+    if (onManualPriceClick) {
+      onManualPriceClick(enseigne, lien, titre);
+    }
+  };
+
+  // ─── Séparation résultats avec / sans prix ────────────────────────────────
+
+  const withPrice = results.filter(r => r.prix !== null && r.prix > 0)
+    .sort((a, b) => (a.prix ?? 0) - (b.prix ?? 0)); // Tri croissant par prix
+  const withoutPrice = results.filter(r => r.prix === null || r.prix === 0);
+
   // ─── Dérivations UI ──────────────────────────────────────────────────────
 
   const isSearching = phase === "searching";
   const isDone = phase === "done";
   const isIdle = phase === "idle";
-  const isCheckingCache = phase === "cache_check";
-
-  const activeSources = sources.filter(s => s.status !== "pending" && s.status !== "skipped");
-  const doneSources = sources.filter(s =>
-    ["success", "not_found", "blocked", "error", "skipped"].includes(s.status)
-  );
-  const successSources = sources.filter(s => s.status === "success");
 
   // ─── Rendu ────────────────────────────────────────────────────────────────
 
@@ -380,7 +481,7 @@ export default function CompareButton({
         </div>
       )}
 
-      {/* ── Bouton de recherche (idle, pas de résultats frais) ────────────── */}
+      {/* ── Bouton de recherche ────────────────────────────────────────────── */}
       {(isIdle || isDone) && !isSearching && (
         <button
           onClick={() => startSearch(false)}
@@ -398,165 +499,116 @@ export default function CompareButton({
         </button>
       )}
 
-      {/* ── Skeleton + progression pendant la recherche ─────────────────── */}
+      {/* ── Progression pendant la recherche ─────────────────────────────── */}
       {isSearching && (
-        <div className="space-y-3">
+        <div className="bg-neutral-950 border border-neutral-800/70 rounded-2xl p-4">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-sm font-bold text-white flex items-center gap-2">
+              <Loader2 className="w-4 h-4 text-red-500 animate-spin" />
+              Recherche en cours
+              {results.length > 0 && (
+                <span className="text-neutral-500 font-normal text-xs">
+                  — {results.length} marchand{results.length > 1 ? "s" : ""} trouvé{results.length > 1 ? "s" : ""}
+                </span>
+              )}
+            </h3>
+            <button
+              onClick={() => setShowSources(!showSources)}
+              className="text-neutral-500 hover:text-neutral-300 transition-colors"
+            >
+              {showSources ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+            </button>
+          </div>
 
-          {/* Barre de progression sources */}
-          <div className="bg-neutral-950 border border-neutral-800/70 rounded-2xl p-4">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                <Loader2 className="w-4 h-4 text-red-500 animate-spin" />
-                Recherche en cours
-              </h3>
-              <button
-                onClick={() => setShowSources(!showSources)}
-                className="text-neutral-500 hover:text-neutral-300 transition-colors"
-              >
-                {showSources
-                  ? <ChevronUp className="w-4 h-4" />
-                  : <ChevronDown className="w-4 h-4" />
-                }
-              </button>
-            </div>
-
-            {/* Sources condensées */}
+          {showSources && (
             <div className="flex flex-wrap gap-1.5">
               {sources.map(s => (
                 <SourceBadge key={s.id} source={s.id} status={s.status} />
               ))}
             </div>
-
-            {/* Compteur */}
-            {results.length > 0 && (
-              <p className="text-xs text-neutral-500 mt-3">
-                {results.length} résultat{results.length > 1 ? "s" : ""} trouvé{results.length > 1 ? "s" : ""}
-              </p>
-            )}
-          </div>
-
-          {/* Skeletons si pas encore de résultats */}
-          {results.length === 0 && (
-            <div className="space-y-3">
-              <SkeletonCard />
-              <SkeletonCard />
-              <SkeletonCard />
-            </div>
           )}
         </div>
       )}
 
-      {/* ── Résultats ────────────────────────────────────────────────────── */}
-      {results.length > 0 && (
-        <div>
-          {/* Header résultats */}
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2">
-              <h3 className="text-base font-bold text-white">
-                {results.length} prix trouvé{results.length > 1 ? "s" : ""}
-              </h3>
-              {hasStale && (
-                <span className="text-[9px] bg-amber-900/30 text-amber-400 border border-amber-800/50 px-2 py-0.5 rounded-md font-bold uppercase">
-                  Anciens résultats
-                </span>
-              )}
-            </div>
+      {/* ── Skeletons si pas encore de résultats ─────────────────────────── */}
+      {isSearching && results.length === 0 && (
+        <div className="space-y-2.5">
+          <SkeletonCard />
+          <SkeletonCard />
+          <SkeletonCard />
+        </div>
+      )}
 
-            {/* Actions */}
+      {/* ── Résultats avec prix ───────────────────────────────────────────── */}
+      {withPrice.length > 0 && (
+        <div>
+          <div className="flex items-center justify-between mb-2.5">
+            <div className="flex items-center gap-2">
+              <h3 className="text-sm font-bold text-white flex items-center gap-1.5">
+                <Tag className="w-3.5 h-3.5 text-emerald-400" />
+                Prix détectés
+              </h3>
+              <span className="text-xs text-neutral-500 font-medium">
+                {withPrice.length} marchand{withPrice.length > 1 ? "s" : ""}
+              </span>
+            </div>
             {(isDone || (!isSearching && results.length > 0)) && (
               <button
                 onClick={handleForceRefresh}
                 disabled={clearing || isSearching}
-                className="p-2 bg-neutral-900 border border-neutral-800 text-neutral-400
+                className="p-1.5 bg-neutral-900 border border-neutral-800 text-neutral-500
                            hover:text-white hover:border-neutral-700 rounded-xl transition-all"
                 title="Forcer l'actualisation"
               >
-                <RefreshCw className={`w-4 h-4 ${clearing ? "animate-spin" : ""}`} />
+                <RefreshCw className={`w-3.5 h-3.5 ${clearing ? "animate-spin" : ""}`} />
               </button>
             )}
           </div>
 
-          {/* Cards résultats */}
-          <div className="space-y-3">
-            {results.map((res, i) => {
-              const prix = res.prix ?? 0;
-              const color = getEnseigneColor(res.enseigne);
-
-              return (
-                <a
-                  key={`${res.enseigne}-${i}`}
-                  href={res.lien}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  style={{
-                    animationDelay: `${i * 80}ms`,
-                    animationFillMode: "both",
-                  }}
-                  className="group bg-[#0e0e0e] rounded-2xl p-3.5 border border-neutral-800/70
-                             flex gap-3.5 items-start
-                             hover:border-neutral-700 hover:bg-[#141414]
-                             transition-all duration-200
-                             animate-in fade-in slide-in-from-bottom-3"
-                >
-                  {/* Logo enseigne */}
-                  <div
-                    className="w-14 h-14 rounded-xl flex items-center justify-center flex-shrink-0
-                               text-xl font-black border"
-                    style={{
-                      backgroundColor: `${color}20`,
-                      borderColor: `${color}40`,
-                      color,
-                    }}
-                  >
-                    {res.image_url ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={res.image_url}
-                        alt={res.enseigne}
-                        className="w-full h-full object-contain rounded-xl p-1"
-                        onError={(e) => {
-                          (e.target as HTMLImageElement).style.display = "none";
-                        }}
-                      />
-                    ) : (
-                      res.enseigne.charAt(0)
-                    )}
-                  </div>
-
-                  {/* Contenu */}
-                  <div className="flex-1 min-w-0">
-                    {/* Enseigne + badges */}
-                    <div className="flex items-center gap-2 mb-1 flex-wrap">
-                      <span className="text-[11px] font-bold uppercase tracking-wider"
-                            style={{ color }}>
-                        {res.enseigne}
-                      </span>
-                      <ResultBadge source={res.source} isStale={res.isStale} />
-                    </div>
-
-                    {/* Titre produit */}
-                    <p className="text-white text-sm font-medium leading-snug line-clamp-2 mb-1">
-                      {res.titre || "Produit"}
-                    </p>
-
-                    {/* Prix */}
-                    {prix > 0 ? (
-                      <PriceDisplay
-                        prix={prix}
-                        prix_precedent={res.prix_precedent}
-                        internalPrice={internalPrice}
-                      />
-                    ) : (
-                      <p className="text-sm text-neutral-500 mt-2">Prix non affiché</p>
-                    )}
-                  </div>
-
-                  {/* Icône lien externe */}
-                  <ExternalLink className="w-3.5 h-3.5 text-neutral-700 group-hover:text-neutral-400 transition-colors flex-shrink-0 mt-1" />
-                </a>
-              );
-            })}
+          <div className="space-y-2.5">
+            {withPrice.map((res, i) => (
+              <PriceResultCard
+                key={`${res.enseigne}-price`}
+                res={res}
+                index={i}
+                internalPrice={internalPrice}
+              />
+            ))}
           </div>
+        </div>
+      )}
+
+      {/* ── Résultats sans prix (liens seuls) ─────────────────────────────── */}
+      {withoutPrice.length > 0 && (
+        <div>
+          <button
+            onClick={() => setShowLinksOnly(!showLinksOnly)}
+            className="flex items-center gap-2 w-full mb-2 group"
+          >
+            <div className="flex items-center gap-1.5">
+              <Link2 className="w-3.5 h-3.5 text-neutral-500" />
+              <span className="text-xs font-semibold text-neutral-500 group-hover:text-neutral-400 transition-colors">
+                {withoutPrice.length} autre{withoutPrice.length > 1 ? "s" : ""} marchand{withoutPrice.length > 1 ? "s" : ""} — prix non détecté
+              </span>
+            </div>
+            {showLinksOnly
+              ? <ChevronUp className="w-3.5 h-3.5 text-neutral-600 ml-auto" />
+              : <ChevronDown className="w-3.5 h-3.5 text-neutral-600 ml-auto" />
+            }
+          </button>
+
+          {showLinksOnly && (
+            <div className="space-y-2">
+              {withoutPrice.map((res, i) => (
+                <LinkOnlyCard
+                  key={`${res.enseigne}-link`}
+                  res={res}
+                  index={i}
+                  onAddPrice={handleAddPrice}
+                />
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -564,9 +616,9 @@ export default function CompareButton({
       {isDone && results.length === 0 && !isSearching && (
         <div className="p-6 bg-neutral-950 rounded-2xl border border-neutral-800/50 text-center">
           <AlertTriangle className="w-8 h-8 text-yellow-500/50 mx-auto mb-3" />
-          <p className="text-white text-sm font-semibold mb-1">Aucun prix trouvé</p>
+          <p className="text-white text-sm font-semibold mb-1">Aucun marchand trouvé</p>
           <p className="text-neutral-500 text-xs">
-            Essayez d'actualiser ou vérifiez votre connexion.
+            Essayez d&apos;actualiser ou vérifiez votre connexion.
           </p>
         </div>
       )}
@@ -576,6 +628,20 @@ export default function CompareButton({
         <div className="flex items-start gap-2 p-3 bg-amber-950/20 border border-amber-900/30 rounded-xl text-xs text-amber-400">
           <Clock className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
           <span>Ces résultats sont anciens. Lancez une recherche pour les actualiser.</span>
+        </div>
+      )}
+
+      {/* ── Stats rapides (fin de recherche) ─────────────────────────────── */}
+      {isDone && results.length > 0 && (
+        <div className="flex items-center gap-1.5 text-[10px] text-neutral-600 flex-wrap">
+          <Zap className="w-3 h-3" />
+          <span>{withPrice.length} prix trouvés</span>
+          {withoutPrice.length > 0 && (
+            <>
+              <span>·</span>
+              <span>{withoutPrice.length} liens sans prix</span>
+            </>
+          )}
         </div>
       )}
     </div>

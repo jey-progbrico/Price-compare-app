@@ -1,14 +1,16 @@
 import * as cheerio from "cheerio";
-import type { SearchResult, ProductInfo, ResultSource } from "./types";
+import type { SearchResult, ProductInfo, ResultSource, PrixStatus } from "./types";
 import { calculateRelevanceScore } from "./queryBuilder";
 
 /**
- * Fallback Scrapers — Vigiprix
+ * Fallback Scrapers — Vigiprix (v2)
  *
- * Scrapers secondaires fiables, utilisés uniquement quand Google CSE
- * retourne peu de résultats (< FALLBACK_THRESHOLD).
+ * Changements v2 :
+ * - Conserve les résultats MÊME sans prix détecté (prix_status: "not_found")
+ * - Les scrapers s'exécutent TOUJOURS (plus de seuil FALLBACK_THRESHOLD)
+ * - Résultat minimum garanti : lien produit + nom enseigne
  *
- * Sites autorisés :
+ * Sites inclus :
  *   - 123elec.com   (électricité, faible anti-bot)
  *   - ManoMano.fr   (général bricolage, modéré)
  *   - Bricozor.com  (bricolage spécialisé, léger)
@@ -16,8 +18,6 @@ import { calculateRelevanceScore } from "./queryBuilder";
  *
  * Sites EXCLUS (anti-bot agressif) :
  *   - Leroy Merlin, Castorama, Brico Dépôt, Bricomarché, Bricoman, Entrepôt
- *
- * Anti-bot : délais aléatoires, rotation UA, limite parallélisme, stop auto sur 403.
  */
 
 // ─── Configuration ─────────────────────────────────────────────────────────────
@@ -27,7 +27,7 @@ const MIN_DELAY_MS = parseInt(process.env.MIN_DELAY_MS || "800");
 const MAX_DELAY_MS = parseInt(process.env.MAX_DELAY_MS || "2500");
 const MAX_CONSECUTIVE_403 = parseInt(process.env.MAX_CONSECUTIVE_403 || "2");
 const SCRAPER_TIMEOUT_MS = 12000; // 12s max par scraper
-const MIN_RELEVANCE_SCORE = parseInt(process.env.MIN_RELEVANCE_SCORE || "35");
+const MIN_RELEVANCE_SCORE = parseInt(process.env.MIN_RELEVANCE_SCORE || "20");
 
 // ─── User-Agents rotatifs ─────────────────────────────────────────────────────
 
@@ -91,6 +91,17 @@ interface ScraperResult {
   blocked?: boolean;
 }
 
+/**
+ * Tente d'extraire un prix depuis un texte HTML.
+ * Retourne null si non trouvé.
+ */
+function parsePriceText(text: string): number | null {
+  const match = text.match(/(\d+[,.]?\d*)/);
+  if (!match) return null;
+  const price = parseFloat(match[1].replace(",", "."));
+  return !isNaN(price) && price > 0 && price < 50000 ? price : null;
+}
+
 // ─── Scraper 123elec ──────────────────────────────────────────────────────────
 
 async function scrape123elec(
@@ -105,19 +116,29 @@ async function scrape123elec(
     const $ = cheerio.load(html);
 
     const productItem = $(".product-item").first();
-    if (!productItem.length) return { success: false, error: "no_results" };
+    if (!productItem.length) {
+      // Retourner quand même l'URL de recherche comme lien de fallback
+      return {
+        success: true,
+        result: {
+          enseigne: "123elec",
+          titre: `Recherche "${query}" sur 123elec`,
+          prix: null,
+          prix_status: "not_found" as PrixStatus,
+          lien: searchUrl,
+          source: "scraper_123elec" as ResultSource,
+          relevance_score: 30,
+          retrieved_at: new Date().toISOString(),
+        },
+      };
+    }
 
-    const titre = productItem.find(".product-item-link").text().trim();
+    const titre = productItem.find(".product-item-link").text().trim() || `Produit 123elec`;
     const priceText = productItem.find(".price").text();
-    const priceMatch = priceText.match(/(\d+[,.]?\d*)/);
-
-    if (!priceMatch) return { success: false, error: "no_price" };
-
-    const prix = parseFloat(priceMatch[1].replace(",", "."));
-    if (isNaN(prix) || prix <= 0) return { success: false, error: "invalid_price" };
-
+    const prix = parsePriceText(priceText);
     const score = calculateRelevanceScore(titre, product);
-    if (score < MIN_RELEVANCE_SCORE) {
+
+    if (score < MIN_RELEVANCE_SCORE - 10) {
       return { success: false, error: `relevance_too_low_${score}` };
     }
 
@@ -129,6 +150,7 @@ async function scrape123elec(
         enseigne: "123elec",
         titre,
         prix,
+        prix_status: prix !== null ? "detected" : "not_found",
         lien,
         source: "scraper_123elec",
         relevance_score: score,
@@ -157,44 +179,27 @@ async function scrapeManoMano(
     const html = await response.text();
 
     // ManoMano charge ses prix via JSON-LD ou injection script
-    // On cherche en priorité dans les structured data
     const jsonLdMatch = html.match(/"price"\s*:\s*"?(\d+[.,]?\d*)"?/);
     const nameMatch = html.match(/"name"\s*:\s*"([^"]{5,150})"/);
 
-    if (!jsonLdMatch) {
+    let prix: number | null = null;
+    let titre = nameMatch ? nameMatch[1] : `Recherche "${query}" sur ManoMano`;
+
+    if (jsonLdMatch) {
+      prix = parsePriceText(jsonLdMatch[1]);
+    } else {
       // Essai avec cheerio (parfois rendu côté serveur)
       const $ = cheerio.load(html);
       const priceEl = $("[class*='price']:not([class*='strike'])").first().text();
-      const priceFromHtml = priceEl.match(/(\d+[,.]?\d*)/);
-      if (!priceFromHtml) return { success: false, error: "no_price" };
-
-      const prix = parseFloat(priceFromHtml[1].replace(",", "."));
-      if (isNaN(prix) || prix <= 0) return { success: false, error: "invalid_price" };
-
-      const titre = $("h1, [class*='title']").first().text().trim() || "Produit ManoMano";
-      const score = calculateRelevanceScore(titre, product);
-      if (score < MIN_RELEVANCE_SCORE) return { success: false, error: `relevance_too_low_${score}` };
-
-      return {
-        success: true,
-        result: {
-          enseigne: "ManoMano",
-          titre,
-          prix,
-          lien: searchUrl,
-          source: "scraper_manomano",
-          relevance_score: score,
-          retrieved_at: new Date().toISOString(),
-        },
-      };
+      prix = parsePriceText(priceEl);
+      const titleEl = $("h1, [class*='title']").first().text().trim();
+      if (titleEl) titre = titleEl;
     }
 
-    const prix = parseFloat(jsonLdMatch[1].replace(",", "."));
-    if (isNaN(prix) || prix <= 0) return { success: false, error: "invalid_price" };
-
-    const titre = nameMatch ? nameMatch[1] : "Produit ManoMano";
     const score = calculateRelevanceScore(titre, product);
-    if (score < MIN_RELEVANCE_SCORE) return { success: false, error: `relevance_too_low_${score}` };
+    if (score < MIN_RELEVANCE_SCORE - 10) {
+      return { success: false, error: `relevance_too_low_${score}` };
+    }
 
     return {
       success: true,
@@ -202,6 +207,7 @@ async function scrapeManoMano(
         enseigne: "ManoMano",
         titre,
         prix,
+        prix_status: prix !== null ? "detected" : "not_found",
         lien: searchUrl,
         source: "scraper_manomano",
         relevance_score: score,
@@ -232,23 +238,24 @@ async function scrapeBricozor(
 
     // Bricozor : structure produit classique Prestashop
     const productItem = $(".product-miniature, .product-container, .ajax_block_product").first();
-    if (!productItem.length) return { success: false, error: "no_results" };
 
-    const titre =
-      productItem.find(".product-title, .product_name, h3, h2").first().text().trim();
-    const priceText = productItem.find(".price, .product-price, .product_price").first().text();
-    const priceMatch = priceText.match(/(\d+[,.]?\d*)/);
+    let titre = `Recherche "${query}" sur Bricozor`;
+    let lien = searchUrl;
+    let prix: number | null = null;
 
-    if (!priceMatch) return { success: false, error: "no_price" };
-
-    const prix = parseFloat(priceMatch[1].replace(",", "."));
-    if (isNaN(prix) || prix <= 0) return { success: false, error: "invalid_price" };
+    if (productItem.length) {
+      const foundTitle = productItem.find(".product-title, .product_name, h3, h2").first().text().trim();
+      if (foundTitle) titre = foundTitle;
+      const priceText = productItem.find(".price, .product-price, .product_price").first().text();
+      prix = parsePriceText(priceText);
+      const lienEl = productItem.find("a").first().attr("href") || "";
+      lien = lienEl.startsWith("http") ? lienEl : `https://www.bricozor.com${lienEl}`;
+    }
 
     const score = calculateRelevanceScore(titre, product);
-    if (score < MIN_RELEVANCE_SCORE) return { success: false, error: `relevance_too_low_${score}` };
-
-    const lienEl = productItem.find("a").first().attr("href") || "";
-    const lien = lienEl.startsWith("http") ? lienEl : `https://www.bricozor.com${lienEl}`;
+    if (score < MIN_RELEVANCE_SCORE - 10) {
+      return { success: false, error: `relevance_too_low_${score}` };
+    }
 
     return {
       success: true,
@@ -256,6 +263,7 @@ async function scrapeBricozor(
         enseigne: "Bricozor",
         titre,
         prix,
+        prix_status: prix !== null ? "detected" : "not_found",
         lien,
         source: "scraper_bricozor" as ResultSource,
         relevance_score: score,
@@ -271,7 +279,7 @@ async function scrapeBricozor(
   }
 }
 
-// ─── Scraper Amazon (optionnel, souvent bloqué) ───────────────────────────────
+// ─── Scraper Amazon ───────────────────────────────────────────────────────────
 
 async function scrapeAmazon(
   query: string,
@@ -288,14 +296,17 @@ async function scrapeAmazon(
     const fractionMatch = html.match(/<span class="a-price-fraction">(\d+)<\/span>/);
     const titleMatch = html.match(/<span class="a-size-medium a-color-base a-text-normal">([^<]{5,200})<\/span>/);
 
-    if (!wholeMatch) return { success: false, error: "no_price" };
+    let prix: number | null = null;
+    if (wholeMatch) {
+      prix = parseFloat(`${wholeMatch[1]}.${fractionMatch ? fractionMatch[1] : "00"}`);
+      if (isNaN(prix) || prix <= 0) prix = null;
+    }
 
-    const prix = parseFloat(`${wholeMatch[1]}.${fractionMatch ? fractionMatch[1] : "00"}`);
-    if (isNaN(prix) || prix <= 0) return { success: false, error: "invalid_price" };
-
-    const titre = titleMatch ? titleMatch[1].trim() : "Produit Amazon";
+    const titre = titleMatch ? titleMatch[1].trim() : `Recherche "${query}" sur Amazon`;
     const score = calculateRelevanceScore(titre, product);
-    if (score < MIN_RELEVANCE_SCORE) return { success: false, error: `relevance_too_low_${score}` };
+    if (score < MIN_RELEVANCE_SCORE - 10) {
+      return { success: false, error: `relevance_too_low_${score}` };
+    }
 
     return {
       success: true,
@@ -303,6 +314,7 @@ async function scrapeAmazon(
         enseigne: "Amazon",
         titre,
         prix,
+        prix_status: prix !== null ? "detected" : "not_found",
         lien: searchUrl,
         source: "scraper_amazon",
         relevance_score: score,
@@ -350,7 +362,7 @@ const FALLBACK_SCRAPERS: FallbackScraper[] = [
     name: "Amazon",
     source: "scraper_amazon",
     fn: scrapeAmazon,
-    enabled: true, // Peut être désactivé si trop de 403
+    enabled: true,
   },
 ];
 
@@ -368,14 +380,17 @@ export interface FallbackResult {
 
 /**
  * Lance les scrapers fallback avec limitation du parallélisme et anti-403.
+ * Retourne les résultats avec OU sans prix — un seul résultat par enseigne.
  *
- * @param query - Requête de recherche (prioritairement ref fabricant ou EAN)
+ * @param query - Requête de recherche
  * @param product - Infos produit pour scoring pertinence
+ * @param existingEnseignes - Enseignes déjà trouvées (pour ne pas dupliquer)
  * @param onResult - Callback appelé dès qu'un résultat est disponible
  */
 export async function runFallbackScrapers(
   query: string,
   product: ProductInfo,
+  existingEnseignes: Set<string> = new Set(),
   onResult?: (result: SearchResult, scraperName: string) => void
 ): Promise<FallbackResult> {
   const activeScrapers = FALLBACK_SCRAPERS.filter(s => s.enabled);
@@ -407,10 +422,22 @@ export async function runFallbackScrapers(
         console.log(`[FallbackScrapers] BLOQUÉ: ${scraper.name}`);
       } else if (scraperResult.success && scraperResult.result) {
         consecutiveBlocked = 0; // Reset si succès
+        const result = scraperResult.result;
+
+        // Ne pas dupliquer si l'enseigne a déjà été trouvée par Google CSE
+        // Exception : si Google n'avait pas de prix mais le scraper en a un
+        if (existingEnseignes.has(result.enseigne)) {
+          console.log(`[FallbackScrapers] Enseigne déjà trouvée, ignoré: ${result.enseigne}`);
+          return; // skip, enseigne déjà présente
+        }
+
         stats.success.push(scraper.name);
-        allResults.push(scraperResult.result);
-        if (onResult) onResult(scraperResult.result, scraper.name);
-        console.log(`[FallbackScrapers] Succès: ${scraper.name} — ${scraperResult.result.prix}€`);
+        allResults.push(result);
+        if (onResult) onResult(result, scraper.name);
+        console.log(
+          `[FallbackScrapers] Succès: ${scraper.name} — ` +
+          (result.prix !== null ? `${result.prix}€` : "lien sans prix")
+        );
       } else {
         consecutiveBlocked = Math.max(0, consecutiveBlocked - 1);
         stats.errors.push(scraper.name);

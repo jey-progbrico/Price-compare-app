@@ -1,11 +1,14 @@
 import { supabase } from "@/lib/supabase";
-import type { CacheEntry, SearchResult, ResultSource } from "./types";
+import type { CacheEntry, SearchResult, ResultSource, PrixStatus } from "./types";
 
 /**
- * CacheManager — Vigiprix
+ * CacheManager — Vigiprix (v2)
  *
- * Gère le cache Supabase (table cache_prix).
- * Architecture : cache central = réduction drastique des appels externes.
+ * Changements v2 :
+ * - Stocke les résultats AVEC et SANS prix (prix_status: "not_found")
+ * - checkCache / getStaleResults retournent aussi les liens sans prix
+ * - saveResults ne filtre plus sur prix !== null
+ * - Gestion du champ prix_status en base
  *
  * TTL par défaut : 168h (7 jours) via CACHE_TTL_HOURS
  */
@@ -17,7 +20,7 @@ const STALE_TTL_HOURS = parseInt(process.env.CACHE_STALE_HOURS || "720"); // 30 
 
 /**
  * Retourne les entrées de cache valides (non expirées) pour un EAN.
- * Une entrée valide = updated_at < TTL_HOURS.
+ * Inclut les résultats avec et sans prix.
  */
 export async function checkCache(
   ean: string,
@@ -42,7 +45,8 @@ export async function checkCache(
     return data
       .filter((entry: CacheEntry) => {
         const updatedAt = new Date(entry.updated_at).getTime();
-        return updatedAt >= cutoff && entry.prix !== null;
+        // On garde les entrées dans le TTL, qu'elles aient un prix ou non
+        return updatedAt >= cutoff;
       })
       .map(entryToSearchResult);
   } catch (err: any) {
@@ -69,9 +73,8 @@ export async function getStaleResults(ean: string): Promise<SearchResult[]> {
 
     return data
       .filter((entry: CacheEntry) => {
-        // Exclure les entrées vraiment trop vieilles (> 30 jours)
         const updatedAt = new Date(entry.updated_at).getTime();
-        return updatedAt >= staleCutoff && entry.prix !== null;
+        return updatedAt >= staleCutoff;
       })
       .map(entryToSearchResult);
   } catch (err: any) {
@@ -100,7 +103,9 @@ export async function hasCachedResults(ean: string): Promise<boolean> {
 
 /**
  * Sauvegarde les résultats dans le cache Supabase.
+ * Stocke les résultats avec ET sans prix (prix_status: "not_found").
  * Gère automatiquement l'historique des prix (prix_precedent).
+ * Déduplication par enseigne : un seul enregistrement par (ean, enseigne).
  */
 export async function saveResults(
   ean: string,
@@ -127,43 +132,52 @@ export async function saveResults(
 
   const now = new Date().toISOString();
 
-  const upserts = results
-    .filter(r => r.prix !== null)
-    .map(result => {
-      const existing = existingCache[result.enseigne];
-      const existingPrix = existing?.prix ?? null;
-      const newPrix = result.prix;
+  // Déduplication par enseigne avant sauvegarde
+  // Si plusieurs résultats pour la même enseigne, on garde celui avec prix en priorité
+  const byEnseigne = new Map<string, SearchResult>();
+  for (const result of results) {
+    const existing = byEnseigne.get(result.enseigne);
+    if (!existing || (result.prix !== null && existing.prix === null)) {
+      byEnseigne.set(result.enseigne, result);
+    }
+  }
 
-      let prix_precedent = existing?.prix_precedent ?? null;
-      let date_changement_prix = existing?.date_changement_prix ?? null;
+  const upserts = Array.from(byEnseigne.values()).map(result => {
+    const existing = existingCache[result.enseigne];
+    const existingPrix = existing?.prix ?? null;
+    const newPrix = result.prix;
 
-      // Détecter un changement de prix
-      if (
-        existing &&
-        existingPrix !== null &&
-        newPrix !== null &&
-        Math.abs(existingPrix - newPrix) > 0.01
-      ) {
-        prix_precedent = existingPrix;
-        date_changement_prix = now;
-      }
+    let prix_precedent = existing?.prix_precedent ?? null;
+    let date_changement_prix = existing?.date_changement_prix ?? null;
 
-      return {
-        ean,
-        enseigne: result.enseigne,
-        titre: result.titre,
-        prix: newPrix,
-        lien: result.lien,
-        image_url: result.image_url ?? null,
-        source: result.source,
-        prix_precedent,
-        date_changement_prix,
-        last_success_at: now,
-        last_searched_at: now,
-        reliability_score: 1.0,
-        updated_at: now,
-      };
-    });
+    // Détecter un changement de prix (uniquement si les deux sont non-null)
+    if (
+      existing &&
+      existingPrix !== null &&
+      newPrix !== null &&
+      Math.abs(existingPrix - newPrix) > 0.01
+    ) {
+      prix_precedent = existingPrix;
+      date_changement_prix = now;
+    }
+
+    return {
+      ean,
+      enseigne: result.enseigne,
+      titre: result.titre,
+      prix: newPrix,
+      prix_status: result.prix_status ?? (newPrix !== null ? "detected" : "not_found"),
+      lien: result.lien,
+      image_url: result.image_url ?? null,
+      source: result.source,
+      prix_precedent,
+      date_changement_prix,
+      last_success_at: newPrix !== null ? now : (existing?.last_success_at ?? null),
+      last_searched_at: now,
+      reliability_score: newPrix !== null ? 1.0 : 0.5,
+      updated_at: now,
+    };
+  });
 
   for (const upsert of upserts) {
     try {
@@ -172,10 +186,24 @@ export async function saveResults(
         .upsert(upsert, { onConflict: "ean,enseigne" });
 
       if (error) {
-        console.error(
-          `[CacheManager] upsert error for ${upsert.enseigne}:`,
-          error.message
-        );
+        // Si la colonne prix_status n'existe pas encore, retry sans elle
+        if (error.message?.includes("prix_status")) {
+          const { prix_status, ...upsertWithoutStatus } = upsert;
+          const { error: retryError } = await supabase
+            .from("cache_prix")
+            .upsert(upsertWithoutStatus, { onConflict: "ean,enseigne" });
+          if (retryError) {
+            console.error(
+              `[CacheManager] upsert retry error for ${upsert.enseigne}:`,
+              retryError.message
+            );
+          }
+        } else {
+          console.error(
+            `[CacheManager] upsert error for ${upsert.enseigne}:`,
+            error.message
+          );
+        }
       }
     } catch (err: any) {
       console.error(
@@ -197,12 +225,80 @@ export async function saveResults(
 }
 
 /**
+ * Upsert un prix manuel dans le cache.
+ * Source = "manual", prix_status = "manual".
+ */
+export async function saveManualPrice(
+  ean: string,
+  enseigne: string,
+  lien: string,
+  prix: number,
+  titre?: string
+): Promise<void> {
+  const now = new Date().toISOString();
+
+  // Vérifier si une entrée existe déjà pour cette enseigne
+  let existingPrix: number | null = null;
+  try {
+    const { data } = await supabase
+      .from("cache_prix")
+      .select("prix")
+      .eq("ean", ean)
+      .eq("enseigne", enseigne)
+      .single();
+    existingPrix = data?.prix ?? null;
+  } catch {}
+
+  const upsert: Record<string, unknown> = {
+    ean,
+    enseigne,
+    titre: titre || `${enseigne} (prix manuel)`,
+    prix,
+    lien,
+    source: "manual",
+    last_searched_at: now,
+    last_success_at: now,
+    reliability_score: 1.0,
+    updated_at: now,
+  };
+
+  // Ajouter prix_status si colonne disponible
+  upsert["prix_status"] = "manual";
+
+  // Historique prix si changement
+  if (existingPrix !== null && Math.abs(existingPrix - prix) > 0.01) {
+    upsert["prix_precedent"] = existingPrix;
+    upsert["date_changement_prix"] = now;
+  }
+
+  try {
+    const { error } = await supabase
+      .from("cache_prix")
+      .upsert(upsert, { onConflict: "ean,enseigne" });
+
+    if (error) {
+      // Retry sans prix_status si colonne manquante
+      if (error.message?.includes("prix_status")) {
+        const { prix_status, ...withoutStatus } = upsert as Record<string, unknown> & { prix_status?: string };
+        const { error: retryError } = await supabase
+          .from("cache_prix")
+          .upsert(withoutStatus, { onConflict: "ean,enseigne" });
+        if (retryError) throw new Error(retryError.message);
+      } else {
+        throw new Error(error.message);
+      }
+    }
+  } catch (err: any) {
+    console.error("[CacheManager] saveManualPrice error:", err.message);
+    throw err;
+  }
+}
+
+/**
  * Invalide le cache pour un EAN (force refresh).
- * Met updated_at à une date ancienne pour que le prochain checkCache retourne [].
  */
 export async function invalidateCache(ean: string): Promise<void> {
   try {
-    // On met updated_at à epoch 0 pour que TTL expire immédiatement
     const { error } = await supabase
       .from("cache_prix")
       .update({ updated_at: new Date(0).toISOString() })
@@ -221,6 +317,7 @@ function entryToSearchResult(entry: CacheEntry): SearchResult {
     enseigne: entry.enseigne,
     titre: entry.titre || "",
     prix: entry.prix,
+    prix_status: (entry.prix_status as PrixStatus) ?? (entry.prix !== null ? "detected" : "not_found"),
     lien: entry.lien || "",
     source: (entry.source as ResultSource) || "cache",
     image_url: entry.image_url ?? null,

@@ -1,28 +1,27 @@
-import type { SearchResult, ProductInfo } from "./types";
-import { buildSearchQueries, buildGoogleShoppingQuery, calculateRelevanceScore } from "./queryBuilder";
+import type { SearchResult, ProductInfo, PrixStatus } from "./types";
+import { buildSearchQueries, calculateRelevanceScore } from "./queryBuilder";
 
 /**
- * Google Custom Search Engine — Vigiprix
+ * Google Custom Search Engine — Vigiprix (v2)
  *
- * Utilise l'API Google Custom Search JSON (Option B).
+ * Changements v2 :
+ * - Conserve TOUS les résultats, même sans prix détecté
+ * - Prix non trouvé → prix_status: "not_found" (lien conservé quand même)
+ * - Cascade complète : toutes les requêtes sont exécutées (pas d'arrêt anticipé)
+ * - Déduplication par enseigne (un seul lien par marchand)
+ * - Score de pertinence MIN abaissé à 20 pour maximiser les résultats
+ *
  * Documentation : https://developers.google.com/custom-search/v1/reference/rest/v1/cse/list
  *
- * Configuration requise (variables d'environnement) :
- *   GOOGLE_CSE_KEY  = votre clé API Google Cloud
- *   GOOGLE_CSE_ID   = votre Search Engine ID (cx)
- *
- * IMPORTANT : Le moteur CSE doit être configuré pour chercher sur des sites
- * marchands (Amazon.fr, manomano.fr, 123elec.com, bricozor.com, etc.)
- * OU configuré en mode "Search the entire web" pour des résultats plus larges.
- *
- * Quota gratuit : 100 requêtes/jour
- * Quota payant  : ~5€/1000 requêtes
+ * Variables d'environnement :
+ *   GOOGLE_CSE_KEY  = clé API Google Cloud
+ *   GOOGLE_CSE_ID   = Search Engine ID (cx) — configuré en mode "Search the entire web"
  */
 
 const GOOGLE_CSE_KEY = process.env.GOOGLE_CSE_KEY || "";
 const GOOGLE_CSE_ID = process.env.GOOGLE_CSE_ID || "";
-const MIN_RELEVANCE_SCORE = parseInt(process.env.MIN_RELEVANCE_SCORE || "35");
-const MAX_RESULTS = 10; // Max autorisé par l'API Google CSE
+const MIN_RELEVANCE_SCORE = parseInt(process.env.MIN_RELEVANCE_SCORE || "20");
+const MAX_RESULTS_PER_QUERY = 10; // Max autorisé par l'API Google CSE
 
 // ─── Types Google CSE API ─────────────────────────────────────────────────────
 
@@ -69,14 +68,15 @@ interface GoogleCSEResponse {
 /**
  * Tente d'extraire un prix numérique depuis les données structurées CSE.
  * Ordre de priorité : pagemap.offer > metatags > snippet/title regex.
+ * Retourne null si aucun prix n'est trouvable — le lien est conservé malgré tout.
  */
-function extractPrice(item: GoogleCSEItem): number | null {
+function extractPrice(item: GoogleCSEItem): { prix: number | null; status: PrixStatus } {
   // 1. Schema.org Offer (le plus fiable)
   if (item.pagemap?.offer?.length) {
     for (const offer of item.pagemap.offer) {
       if (offer.price) {
         const price = parseFloat(offer.price.replace(",", ".").replace(/[^\d.]/g, ""));
-        if (price > 0 && price < 50000) return price;
+        if (price > 0 && price < 50000) return { prix: price, status: "detected" };
       }
     }
   }
@@ -90,7 +90,7 @@ function extractPrice(item: GoogleCSEItem): number | null {
         meta["twitter:data1"];
       if (rawPrice) {
         const price = parseFloat(rawPrice.replace(",", ".").replace(/[^\d.]/g, ""));
-        if (price > 0 && price < 50000) return price;
+        if (price > 0 && price < 50000) return { prix: price, status: "detected" };
       }
     }
   }
@@ -107,11 +107,12 @@ function extractPrice(item: GoogleCSEItem): number | null {
     const match = textToSearch.match(pattern);
     if (match) {
       const price = parseFloat(match[1].replace(",", "."));
-      if (price > 0 && price < 50000) return price;
+      if (price > 0 && price < 50000) return { prix: price, status: "detected" };
     }
   }
 
-  return null;
+  // Aucun prix trouvé — on retourne le lien quand même
+  return { prix: null, status: "not_found" };
 }
 
 /**
@@ -142,6 +143,39 @@ function extractEnseigne(displayLink: string): string {
     "elektro.fr": "Elektro",
     "outillage.fr": "Outillage.fr",
     "entrepot-du-bricolage.fr": "L'Entrepôt du Bricolage",
+    "rexel.fr": "Rexel",
+    "grdf.fr": "GRDF",
+    "conrad.fr": "Conrad",
+    "adeo.com": "Adeo",
+    "bricorama.fr": "Bricorama",
+    "pointp.fr": "Point P",
+    "mr-bricolage.fr": "Mr Bricolage",
+    "mcm-electromenager.fr": "MCM",
+    "ubaldi.com": "Ubaldi",
+    "mega.fr": "Mega",
+    "maisondunet.com": "Maison du Net",
+    "electricite-pro.fr": "Electricité Pro",
+    "proelec.fr": "Proelec",
+    "direct-electricite.fr": "Direct Electricité",
+    "elekta.fr": "Elekta",
+    "sosntools.com": "SOS N'Tools",
+    "probateco.fr": "Probateco",
+    "toolstation.fr": "Toolstation",
+    "screwfix.fr": "Screwfix",
+    "hornbach.fr": "Hornbach",
+    "obi.fr": "OBI",
+    "espace-bricolage.fr": "Espace Bricolage",
+    "bricoled.fr": "Bricoled",
+    "sparkler-led.fr": "Sparkler LED",
+    "neo-neon.com": "Neo-Neon",
+    "materielelectrique.com": "Matériel Électrique",
+    "debflex.fr": "Debflex",
+    "legrand.fr": "Legrand",
+    "schneider-electric.fr": "Schneider Electric",
+    "hager.fr": "Hager",
+    "acova.fr": "Acova",
+    "thermor.fr": "Thermor",
+    "atlantic.fr": "Atlantic",
   };
 
   const hostname = displayLink
@@ -151,7 +185,7 @@ function extractEnseigne(displayLink: string): string {
 
   if (knownEnseignes[hostname]) return knownEnseignes[hostname];
 
-  // Capitaliser le premier domaine
+  // Capitaliser le premier segment du domaine
   const domain = hostname.split(".")[0];
   return domain.charAt(0).toUpperCase() + domain.slice(1);
 }
@@ -160,10 +194,11 @@ function extractEnseigne(displayLink: string): string {
 
 /**
  * Lance une recherche Google CSE et retourne les résultats normalisés.
+ * Conserve TOUS les résultats, même ceux sans prix détecté.
  *
  * @param query - Requête de recherche
  * @param product - Informations produit pour filtrage de pertinence
- * @returns Liste de SearchResult avec prix, enseigne, lien, image
+ * @returns Liste de SearchResult avec ou sans prix, mais toujours avec le lien
  */
 export async function searchGoogleCSE(
   query: string,
@@ -174,16 +209,15 @@ export async function searchGoogleCSE(
     return [];
   }
 
-  const googleQuery = buildGoogleShoppingQuery(query);
   const url = new URL("https://www.googleapis.com/customsearch/v1");
   url.searchParams.set("key", GOOGLE_CSE_KEY);
   url.searchParams.set("cx", GOOGLE_CSE_ID);
-  url.searchParams.set("q", googleQuery);
-  url.searchParams.set("num", String(MAX_RESULTS));
+  url.searchParams.set("q", query.trim());
+  url.searchParams.set("num", String(MAX_RESULTS_PER_QUERY));
   url.searchParams.set("gl", "fr");    // Géolocalisation France
   url.searchParams.set("hl", "fr");    // Langue interface française
 
-  console.log(`[GoogleCSE] Recherche: "${googleQuery}"`);
+  console.log(`[GoogleCSE] Recherche: "${query}"`);
 
   let response: Response;
   try {
@@ -206,6 +240,7 @@ export async function searchGoogleCSE(
   if (!response.ok) {
     const errorText = await response.text().catch(() => "");
     console.error(`[GoogleCSE] HTTP ${response.status}: ${errorText}`);
+    if (response.status === 403) throw new Error(`403 PERMISSION_DENIED: ${errorText}`);
     return [];
   }
 
@@ -218,12 +253,14 @@ export async function searchGoogleCSE(
   }
 
   if (data.error) {
-    console.error(`[GoogleCSE] API error ${data.error.code}: ${data.error.message}`);
+    const msg = `API error ${data.error.code}: ${data.error.message}`;
+    console.error(`[GoogleCSE] ${msg}`);
+    if (data.error.code === 403) throw new Error(`403 ${msg}`);
     return [];
   }
 
   if (!data.items || data.items.length === 0) {
-    console.log(`[GoogleCSE] Aucun résultat pour "${googleQuery}"`);
+    console.log(`[GoogleCSE] Aucun résultat pour "${query}"`);
     return [];
   }
 
@@ -231,18 +268,18 @@ export async function searchGoogleCSE(
   const results: SearchResult[] = [];
 
   for (const item of data.items) {
-    const prix = extractPrice(item);
-
-    // Filtrer les items sans prix (pages catégories, blog, etc.)
-    if (prix === null) continue;
-
+    const { prix, status: prix_status } = extractPrice(item);
     const enseigne = extractEnseigne(item.displayLink);
     const titre = item.title || "";
 
     // Calcul du score de pertinence
     const score = calculateRelevanceScore(titre, product);
-    if (score < MIN_RELEVANCE_SCORE) {
-      console.log(`[GoogleCSE] Rejeté (score ${score}%): ${titre.substring(0, 60)}`);
+
+    // Rejeter uniquement les résultats vraiment hors-sujet (score très bas)
+    // On est plus permissif sur les résultats sans prix (score min = 15)
+    const minScore = prix_status === "detected" ? MIN_RELEVANCE_SCORE : Math.max(15, MIN_RELEVANCE_SCORE - 10);
+    if (score < minScore) {
+      console.log(`[GoogleCSE] Rejeté (score ${score}%, min ${minScore}%): ${titre.substring(0, 60)}`);
       continue;
     }
 
@@ -253,6 +290,7 @@ export async function searchGoogleCSE(
       enseigne,
       titre,
       prix,
+      prix_status,
       lien: item.link,
       source: "google_cse",
       image_url,
@@ -261,20 +299,24 @@ export async function searchGoogleCSE(
     });
   }
 
-  console.log(`[GoogleCSE] ${results.length} résultats valides sur ${data.items.length} items`);
+  const withPrice = results.filter(r => r.prix !== null).length;
+  const withoutPrice = results.length - withPrice;
+  console.log(
+    `[GoogleCSE] ${results.length}/${data.items.length} résultats ` +
+    `(${withPrice} avec prix, ${withoutPrice} liens seuls)`
+  );
   return results;
 }
 
 /**
- * Lance une recherche en cascade sur plusieurs requêtes.
- * S'arrête dès qu'on obtient suffisamment de résultats.
+ * Lance une recherche en cascade sur TOUTES les requêtes générées.
+ * Ne s'arrête PAS dès qu'on a assez de résultats — exploite toutes les requêtes.
+ * Déduplication par enseigne (un seul lien par marchand).
  *
  * @param product - Infos produit pour générer les requêtes
- * @param minResults - Nombre minimum de résultats souhaités (défaut: 2)
  */
 export async function searchGoogleCSECascade(
   product: ProductInfo,
-  minResults = 2,
   onProgress?: (results: SearchResult[], queryIndex: number) => void
 ): Promise<SearchResult[]> {
   const queries = buildSearchQueries(product);
@@ -287,21 +329,24 @@ export async function searchGoogleCSECascade(
 
     const results = await searchGoogleCSE(query, product);
 
-    // Dédupliquer par enseigne (garder le prix le plus récent)
+    // Déduplication par enseigne : on garde le premier résultat trouvé par enseigne
+    // Priorité aux résultats avec prix sur ceux sans prix
     for (const r of results) {
       if (!seenEnseignes.has(r.enseigne)) {
         seenEnseignes.add(r.enseigne);
         allResults.push(r);
+      } else if (r.prix !== null) {
+        // Si on avait un lien sans prix pour cette enseigne, on le remplace par un résultat avec prix
+        const existingIdx = allResults.findIndex(
+          existing => existing.enseigne === r.enseigne && existing.prix === null
+        );
+        if (existingIdx !== -1) {
+          allResults[existingIdx] = r;
+        }
       }
     }
 
     if (onProgress) onProgress([...allResults], i);
-
-    // Arrêt anticipé si on a assez de résultats
-    if (allResults.length >= minResults) {
-      console.log(`[GoogleCSE] ${allResults.length} résultats — arrêt cascade`);
-      break;
-    }
 
     // Petite pause entre les requêtes (respecter les quotas)
     if (i < queries.length - 1) {
@@ -309,6 +354,7 @@ export async function searchGoogleCSECascade(
     }
   }
 
+  console.log(`[GoogleCSE] Cascade terminée: ${allResults.length} enseignes uniques`);
   return allResults;
 }
 

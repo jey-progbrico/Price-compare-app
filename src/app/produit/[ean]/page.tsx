@@ -1,9 +1,9 @@
 import { supabase } from "@/lib/supabase";
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import CompareButton from "@/components/CompareButton";
 import InitialProductForm from "./InitialProductForm";
 import ProductHeader from "./ProductHeader";
+import ProductSearchSection from "./ProductSearchSection";
 
 export const dynamic = "force-dynamic";
 export const fetchCache = "force-no-store";
@@ -28,15 +28,20 @@ export default async function ProductPage({
   }
 
   const isUnknown = !produit;
+  const internalPrice = produit?.prix_vente ? Number(produit.prix_vente) : null;
 
   return (
     <main className="min-h-full bg-[#0a0a0c] p-4 sm:p-6 pt-6 font-sans text-white animate-in fade-in">
       <ProductHeader ean={ean} produit={produit} isUnknown={isUnknown} />
-      {/* Résultats concurrents */}
+
       {isUnknown ? (
         <InitialProductForm ean={ean} />
       ) : (
-        <CompareButton ean={ean} internalPrice={produit.prix_vente ? Number(produit.prix_vente) : null} isUnknown={false} />
+        // ProductSearchSection est un Client Component qui gère :
+        // - CompareButton (SSE)
+        // - ManualPriceModal (saisie manuelle depuis les liens sans prix)
+        // - Bouton "Ajouter un prix manuellement" (saisie directe)
+        <ProductSearchSection ean={ean} internalPrice={internalPrice} />
       )}
     </main>
   );

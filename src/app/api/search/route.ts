@@ -9,7 +9,8 @@ export const dynamic = "force-dynamic";
  * GET /api/search?ean=XXX
  *
  * Endpoint REST (non-SSE) pour les cas où EventSource n'est pas disponible.
- * Retourne tous les résultats en une seule réponse JSON.
+ * Retourne TOUS les résultats : avec prix et sans prix (liens seuls).
+ * Le client décide comment afficher les résultats sans prix.
  */
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -48,21 +49,20 @@ export async function GET(request: Request) {
       force_refresh: forceRefresh,
     });
 
-    // 3. Filtrer et formater la réponse
-    const finalResults = results
-      .filter(r => r.prix !== null && r.prix > 0)
-      .map(r => ({
-        enseigne: r.enseigne,
-        titre: r.titre,
-        prix: r.prix,
-        lien: r.lien,
-        source: r.source,
-        image_url: r.image_url ?? null,
-        isCached: r.source === "cache",
-        prix_precedent: r.prix_precedent ?? null,
-        date_changement_prix: r.date_changement_prix ?? null,
-        relevance_score: r.relevance_score ?? null,
-      }));
+    // 3. Formater la réponse — TOUS les résultats (avec et sans prix)
+    const finalResults = results.map(r => ({
+      enseigne: r.enseigne,
+      titre: r.titre,
+      prix: r.prix,
+      prix_status: r.prix_status ?? (r.prix !== null ? "detected" : "not_found"),
+      lien: r.lien,
+      source: r.source,
+      image_url: r.image_url ?? null,
+      isCached: r.source === "cache",
+      prix_precedent: r.prix_precedent ?? null,
+      date_changement_prix: r.date_changement_prix ?? null,
+      relevance_score: r.relevance_score ?? null,
+    }));
 
     return NextResponse.json({ results: finalResults, stats });
   } catch (error: any) {
