@@ -177,7 +177,6 @@ function extractEnseigne(displayLink: string): string {
     "thermor.fr": "Thermor",
     "atlantic.fr": "Atlantic",
     "domomat.com": "Domomat",
-    "domomat.com": "Domomat",
     "materielelectrique.com": "Materiel Electrique",
     "toolstation.fr": "Toolstation",
     "legallais.com": "Legallais",
