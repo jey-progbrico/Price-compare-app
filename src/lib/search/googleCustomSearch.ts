@@ -177,8 +177,6 @@ function extractEnseigne(displayLink: string): string {
     "thermor.fr": "Thermor",
     "atlantic.fr": "Atlantic",
     "domomat.com": "Domomat",
-    "materielelectrique.com": "Materiel Electrique",
-    "toolstation.fr": "Toolstation",
     "legallais.com": "Legallais",
     "maxoutil.com": "Maxoutil",
     "quincaillerie.pro": "Quincaillerie Pro",
@@ -193,7 +191,6 @@ function extractEnseigne(displayLink: string): string {
     "elec44.fr": "Elec44",
     "bis-electric.com": "BIS Electric",
     "elecdirect.fr": "ElecDirect",
-    "cdiscount.com": "Cdiscount",
     "rakuten.fr": "Rakuten",
     "baudelet-materiels.fr": "Baudelet Materiels",
     "cazabox.com": "Cazabox",
@@ -234,7 +231,6 @@ function extractEnseigne(displayLink: string): string {
     "monbatiment.fr": "Mon Batiment",
     "afdb.fr": "AFDB",
     "afz-outillage.fr": "AFZ Outillage",
-    "entrepot-du-bricolage.fr": "Entrepôt du Bricolage",
     "gedimat.fr": "Gedimat"
   };
 
