@@ -387,65 +387,70 @@ export default function CompareButton({
       const eventSource = new EventSource(url);
       streamRef.current = eventSource;
 
-    eventSource.onopen = () => console.log("[FRONTEND] STREAM OPENED");
+      eventSource.onopen = () => console.log("[FRONTEND] STREAM OPENED");
 
-    eventSource.addEventListener("cache_hit", (e: MessageEvent) => {
-      console.log("[FRONTEND] CACHE HIT received");
-      const event = JSON.parse(e.data);
-      if (event.results?.length > 0) {
-        setResults(event.results.map((r: SearchResult) => ({ ...r, source: "cache", isCached: true })));
-        setHasStale(false);
-        updateSource("cache", { status: "success", count: event.results.length });
-      }
-    });
-
-    eventSource.addEventListener("source_start", (e: MessageEvent) => {
-      const event = JSON.parse(e.data);
-      console.log(`[FRONTEND] SOURCE START: ${event.source}`);
-      if (event.source) updateSource(event.source, { status: "running" });
-    });
-
-    eventSource.addEventListener("source_result", (e: MessageEvent) => {
-      const event = JSON.parse(e.data);
-      if (event.result) {
-        console.log(`[FRONTEND] STREAM MESSAGE RECEIVED from ${event.result.enseigne}`);
-        setResults(prev => {
-          if (prev.some(r => r.enseigne === event.result.enseigne)) return prev;
-          return [...prev, event.result];
-        });
-        if (event.source) {
-          setSources(prev =>
-            prev.map(s => s.id === event.source ? { ...s, count: s.count + 1 } : s)
-          );
+      eventSource.addEventListener("cache_hit", (e: MessageEvent) => {
+        console.log("[FRONTEND] CACHE HIT received");
+        const event = JSON.parse(e.data);
+        if (event.results?.length > 0) {
+          setResults(event.results.map((r: SearchResult) => ({ ...r, source: "cache", isCached: true })));
+          setHasStale(false);
+          updateSource("cache", { status: "success", count: event.results.length });
         }
-      }
-    });
+      });
 
-    eventSource.addEventListener("source_end", (e: MessageEvent) => {
-      const event = JSON.parse(e.data);
-      console.log(`[FRONTEND] SOURCE END: ${event.source} | Status: ${event.status}`);
-      if (event.source) {
-        updateSource(event.source, { status: event.status as SourceStatus || "not_found" });
-      }
-    });
+      eventSource.addEventListener("source_start", (e: MessageEvent) => {
+        const event = JSON.parse(e.data);
+        console.log(`[FRONTEND] SOURCE START: ${event.source}`);
+        if (event.source) updateSource(event.source, { status: "running" });
+      });
 
-    eventSource.addEventListener("done", () => {
-      console.log("[FRONTEND] STREAM CLOSED (done)");
+      eventSource.addEventListener("source_result", (e: MessageEvent) => {
+        const event = JSON.parse(e.data);
+        if (event.result) {
+          console.log(`[FRONTEND] STREAM MESSAGE RECEIVED from ${event.result.enseigne}`);
+          setResults(prev => {
+            if (prev.some(r => r.enseigne === event.result.enseigne)) return prev;
+            return [...prev, event.result];
+          });
+          if (event.source) {
+            setSources(prev =>
+              prev.map(s => s.id === event.source ? { ...s, count: s.count + 1 } : s)
+            );
+          }
+        }
+      });
+
+      eventSource.addEventListener("source_end", (e: MessageEvent) => {
+        const event = JSON.parse(e.data);
+        console.log(`[FRONTEND] SOURCE END: ${event.source} | Status: ${event.status}`);
+        if (event.source) {
+          updateSource(event.source, { status: event.status as SourceStatus || "not_found" });
+        }
+      });
+
+      eventSource.addEventListener("done", () => {
+        console.log("[FRONTEND] STREAM CLOSED (done)");
+        setPhase("done");
+        eventSource.close();
+      });
+
+      eventSource.addEventListener("error", (e: MessageEvent) => {
+        console.error("[FRONTEND] STREAM ERROR:", e);
+        let msg = "Erreur de connexion.";
+        try {
+          const data = JSON.parse((e as any).data);
+          if (data.message) msg = data.message;
+        } catch {}
+        setError(msg);
+        setPhase("done");
+        eventSource.close();
+      });
+    } catch (err: any) {
+      console.error("[FRONTEND] EventSource creation error:", err);
+      setError("Impossible d'initialiser la recherche en direct.");
       setPhase("done");
-      eventSource.close();
-    });
-
-    eventSource.addEventListener("error", (e: MessageEvent) => {
-      console.error("[FRONTEND] STREAM ERROR:", e);
-      let msg = "Erreur de connexion.";
-      try {
-        const data = JSON.parse((e as any).data);
-        if (data.message) msg = data.message;
-      } catch {}
-      setError(msg);
-      setPhase("done");
-      eventSource.close();
-    });
+    }
   };
 
   // ─── Force refresh ────────────────────────────────────────────────────────
