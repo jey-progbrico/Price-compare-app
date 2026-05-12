@@ -233,10 +233,11 @@ export async function discoverViaMerchantSearch(
         '/collection', '/rayon', '/listing', '?q=', 'filter='
       ].some(p => cleanUrl.includes(p));
 
-      const isPos = [
-        '/p/', '/pr/', '/produit/', '/product/', '/article/', 
-        /\d{6,13}/, /\.html$/, /\/[a-z0-9-]+-[0-9]{5,}/
-      ].some(p => typeof p === 'string' ? cleanUrl.includes(p) : p.test(cleanUrl));
+      const posStrings = ['/p/', '/pr/', '/produit/', '/product/', '/article/'];
+      const posRegexes = [/\d{6,13}/, /\.html$/, /\/[a-z0-9-]+-[0-9]{5,}/];
+
+      const isPos = posStrings.some(p => cleanUrl.includes(p)) || 
+                    posRegexes.some(r => r.test(cleanUrl));
 
       if (isPos && !isNeg) {
         links.push(href.split('?')[0]);
