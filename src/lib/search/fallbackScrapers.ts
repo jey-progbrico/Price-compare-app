@@ -255,7 +255,7 @@ export async function discoverViaMerchantSearch(
 
         const cleanUrl = href.split('?')[0].split('#')[0].toLowerCase();
         const isNeg = ['/search', '/recherche', '/categorie', '/univers', '/gamme'].some(p => cleanUrl.includes(p));
-        const isPos = ['/p/', '/pr/', '/produit/', /\.html$/].some(p => cleanUrl.includes(p));
+        const isPos = ['/p/', '/pr/', '/produit/'].some(p => cleanUrl.includes(p)) || /\.html$/.test(cleanUrl);
         
         if (isPos && !isNeg) links.push(href.split('?')[0]);
       });
