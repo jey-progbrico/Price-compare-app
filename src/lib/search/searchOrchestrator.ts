@@ -1,7 +1,5 @@
 import { checkCache, getStaleResults, saveResults } from "./cacheManager";
-import { searchGoogleCSECascade, isGoogleCSEConfigured } from "./googleCustomSearch";
-import { runFallbackScrapers, FALLBACK_SCRAPERS, scrapeUrl } from "./fallbackScrapers";
-import { buildSearchQueries } from "./queryBuilder";
+import { runFallbackScrapers } from "./fallbackScrapers";
 import type {
   SearchResult,
   ProductInfo,
@@ -11,15 +9,14 @@ import type {
 } from "./types";
 
 /**
- * SearchOrchestrator — Vigiprix (v3)
+ * SearchOrchestrator — Vigiprix (Simplified v1)
  *
- * Orchestre la recherche de prix :
+ * Mode minimal pour restaurer la stabilité :
  * 1. Cache Supabase
- * 2. Google Custom Search + Extraction live pour liens sans prix
- * 3. Fallback scrapers dynamiques (Leroy Merlin, Brico Dépôt, etc.)
+ * 2. Scraper ManoMano direct (pas de Google CSE, pas de scoring complexe)
  */
 
-const DEFAULT_TTL_HOURS = parseInt(process.env.CACHE_TTL_HOURS || "168");
+const DEFAULT_TTL_HOURS = 168;
 
 export interface OrchestratorCallbacks {
   onEvent: (event: SearchEvent) => void;
@@ -60,10 +57,6 @@ export async function runSearch(
       emit({ type: "cache_hit", results: withCacheSource, source: "cache" });
       allResults.push(...withCacheSource);
       stats.from_cache = cachedResults.length;
-      stats.total_results = allResults.length;
-      stats.with_price = allResults.filter(r => r.prix !== null).length;
-      stats.without_price = allResults.filter(r => r.prix === null).length;
-      stats.duration_ms = Date.now() - startTime;
       stats.sources_tried.push("cache");
       stats.sources_success.push("cache");
     }
@@ -75,120 +68,45 @@ export async function runSearch(
     }
   }
 
-  // ─── ÉTAPE 2 : Google Custom Search ──────────────────────────────────────
-
-  emit({ type: "source_start", source: "google_cse", status: "running" });
-  stats.sources_tried.push("google_cse");
-
-  let googleResults: SearchResult[] = [];
-  if (isGoogleCSEConfigured()) {
-    try {
-      console.log(`[PIPELINE] Starting Step 2: Google CSE Cascade`);
-      let resultsDiscovered = 0;
-      googleResults = await searchGoogleCSECascade(
-        product,
-        (partialResults) => {
-          const newResults = partialResults.slice(resultsDiscovered);
-          resultsDiscovered = partialResults.length;
-          for (const r of newResults) {
-            console.log(`[PIPELINE] Google CSE found: ${r.enseigne} | ${r.prix}€`);
-            emit({ type: "source_result", source: "google_cse", result: r });
-          }
-        }
-      );
-
-      // --- ENHANCEMENT: Scrape missing prices for Google results ---
-      const missingPrice = googleResults.filter(r => r.prix === null);
-      if (missingPrice.length > 0) {
-        console.log(`[PIPELINE] Scraping ${missingPrice.length} Google links without price...`);
-        const toScrape = missingPrice.slice(0, 2);
-        await Promise.all(toScrape.map(async (r) => {
-          const res = await scrapeUrl(r.lien, r.enseigne, product);
-          if (res.success && res.result?.prix) {
-            r.prix = res.result.prix;
-            r.prix_status = "detected";
-            r.image_url = res.result.image_url || r.image_url;
-            console.log(`[PIPELINE] Price recovered for ${r.enseigne}: ${r.prix}€`);
-            emit({ type: "source_result", source: "google_cse", result: r });
-          }
-        }));
-      }
-
-      if (googleResults.length > 0) {
-        stats.from_google = googleResults.length;
-        stats.sources_success.push("google_cse");
-      }
-      console.log(`[PIPELINE] Step 2 finished. Found ${googleResults.length} results from Google.`);
-      emit({ type: "source_end", source: "google_cse", status: googleResults.length > 0 ? "success" : "not_found" });
-    } catch (err: any) {
-      console.log(`[PIPELINE] Google CSE Failed/Blocked: ${err.message}`);
-      emit({ type: "source_end", source: "google_cse", status: "error" });
-    }
-  }
-
-  allResults.push(...googleResults);
-
-  // ─── ÉTAPE 3 : Scrapers fallback ─────────────────────────────────────────
-
-  console.log(`[PIPELINE] Entering Step 3 (Fallback Discovery)`);
-  const existingEnseignes = new Set(allResults.map(r => r.enseigne));
-  const queries = buildSearchQueries(product);
-  const bestQuery = (
-    queries.find(q => q.type === "ref_fabricant")?.query ||
-    queries.find(q => q.type === "mixed")?.query ||
-    queries.find(q => q.type === "designation")?.query ||
-    product.ean ||
-    ""
-  );
-
-  console.log(`[PIPELINE] FALLBACK START | Query: "${bestQuery}"`);
-
-  const scraperSources = FALLBACK_SCRAPERS.map(s => s.source);
-  for (const src of scraperSources) {
-    emit({ type: "source_start", source: src, status: "running" });
-    stats.sources_tried.push(src);
-  }
+  // ─── ÉTAPE 2 : Recherche Live (Simplified Mode - ManoMano Only) ───────────
+  
+  const query = product.ean || product.designation || "";
+  console.log(`[PIPELINE] Minimal Search for: "${query}"`);
+  
+  emit({ type: "source_start", source: "scraper_manomano", status: "running" });
+  stats.sources_tried.push("scraper_manomano");
 
   try {
-    const fallbackStart = Date.now();
-    const { results: fallbackResults, stats: fallbackStats } =
-      await runFallbackScrapers(
-        bestQuery, 
-        product, 
-        existingEnseignes, 
-        (result) => {
-          console.log(`[PIPELINE] Result discovered: ${result.enseigne} | ${result.prix}€ | Source: ${result.source}`);
-          emit({ type: "source_result", source: result.source, result });
-        },
-        (category, message) => {
-          emit({ type: "debug", category, message });
-        }
-      );
+    const { results: fallbackResults } = await runFallbackScrapers(
+      query, 
+      product, 
+      new Set(), 
+      (result) => {
+        emit({ type: "source_result", source: "scraper_manomano", result });
+      }
+    );
 
-    console.log(`[PIPELINE] Step 3 complete in ${Date.now() - fallbackStart}ms. Discovered ${fallbackResults.length} new items.`);
-
-    for (const src of scraperSources) {
-      const scraperName = FALLBACK_SCRAPERS.find(s => s.source === src)?.name || "";
-      const succeeded = fallbackStats.success.includes(scraperName);
-      const blocked = fallbackStats.blocked.includes(scraperName);
-      emit({ type: "source_end", source: src, status: succeeded ? "success" : blocked ? "blocked" : "not_found" });
-      if (succeeded) stats.sources_success.push(src);
+    if (fallbackResults.length > 0) {
+      allResults.push(...fallbackResults);
+      stats.from_scrapers = fallbackResults.length;
+      stats.sources_success.push("scraper_manomano");
+      emit({ type: "source_end", source: "scraper_manomano", status: "success" });
+    } else {
+      emit({ type: "source_end", source: "scraper_manomano", status: "not_found" });
     }
-
-    allResults.push(...fallbackResults);
-    stats.from_scrapers = fallbackResults.length;
   } catch (err: any) {
-    console.log(`[PIPELINE] ERROR in Step 3: ${err.message}`);
+    console.log(`[PIPELINE] Error during minimal search: ${err.message}`);
+    emit({ type: "source_end", source: "scraper_manomano", status: "error" });
   }
 
-  // ─── ÉTAPE 4 : Sauvegarde cache ──────────────────────────────────────────
+  // ─── ÉTAPE 3 : Sauvegarde cache ──────────────────────────────────────────
 
   const liveResults = allResults.filter(r => r.source !== "cache");
   if (liveResults.length > 0) {
     saveResults(product.ean, liveResults).catch(err => console.error("[PIPELINE] Cache save error:", err.message));
   }
 
-  // ─── ÉTAPE 5 : Fin ───────────────────────────────────────────────────────
+  // ─── ÉTAPE 4 : Fin ───────────────────────────────────────────────────────
 
   stats.total_results = allResults.length;
   stats.with_price = allResults.filter(r => r.prix !== null).length;
@@ -214,7 +132,6 @@ export async function processScrapingQueue(
     marque: productInfos?.marque,
     designation: productInfos?.designation,
     reference_fabricant: productInfos?.reference_fabricant,
-    categorie: (productInfos as any)?.categorie_produit,
   };
 
   const legacyEvents: unknown[] = [];
@@ -230,8 +147,6 @@ export async function processScrapingQueue(
         onProgress("scraper_result", { scraper: event.result.enseigne, status: "success", result: event.result });
       } else if (event.type === "source_end" && event.status !== "success") {
         onProgress("scraper_result", { scraper: event.source, status: event.status });
-      } else if (event.type === "debug") {
-        onProgress("debug", { category: event.category, message: event.message });
       }
     },
   });

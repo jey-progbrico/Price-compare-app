@@ -34,13 +34,16 @@ export async function GET(request: Request) {
     async start(controller) {
       const emit = (event: SearchEvent) => {
         try {
-          const sseData =
-            `event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`;
+          const sseData = `event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`;
+          console.log(`[SSE-SEND] type=${event.type} | length=${sseData.length}`);
           controller.enqueue(encoder.encode(sseData));
         } catch {
-          // Stream fermé côté client — ignorer
+          // Stream fermé côté client
         }
       };
+
+      // Émission immédiate du canal de debug pour confirmation
+      emit({ type: "debug", category: "test", message: "DEBUG CHANNEL ACTIVE" });
 
       try {
         // 1. Récupérer les infos produit depuis Supabase

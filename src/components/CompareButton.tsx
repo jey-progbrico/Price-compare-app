@@ -435,7 +435,12 @@ export default function CompareButton({
         eventSource.close();
       });
 
+      eventSource.onmessage = (e: MessageEvent) => {
+        console.log("[RAW SSE MESSAGE]", e.data);
+      };
+
       eventSource.addEventListener("debug", (e: MessageEvent) => {
+        console.log("[RAW SSE DEBUG EVENT]", e.data);
         const event = JSON.parse(e.data);
         console.log(`[BACKEND-DEBUG][${event.category}] ${event.message}`);
       });

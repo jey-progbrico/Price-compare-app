@@ -356,18 +356,31 @@ export async function discoverViaDuckDuckGo(query: string, product: ProductInfo)
 
 // ─── Orchestration Fallback ───────────────────────────────────────────────────
 
+const FETCH_TIMEOUT_MS = 10000;
+
+async function fetchMinimal(url: string): Promise<string> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+  try {
+    const res = await fetch(url, {
+      signal: controller.signal,
+      headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" }
+    });
+    clearTimeout(timeout);
+    return await res.text();
+  } catch (err) {
+    clearTimeout(timeout);
+    throw err;
+  }
+}
+
 const MERCHANTS = [
-  { name: "Leroy Merlin", searchPattern: "https://www.leroymerlin.fr/recherche?q={{query}}" },
-  { name: "Brico Dépôt", searchPattern: "https://www.bricodepot.fr/recherche/search.jsp?query={{query}}" },
-  { name: "Castorama", searchPattern: "https://www.castorama.fr/search?q={{query}}" },
   { name: "ManoMano", searchPattern: "https://www.manomano.fr/recherche/{{query}}" },
-  { name: "Bricomarché", searchPattern: "https://www.bricomarche.com/recherche?text={{query}}" },
 ];
 
-export const FALLBACK_SCRAPERS = MERCHANTS.map(m => ({
-  name: m.name,
-  source: ("scraper_" + m.name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, "")) as ResultSource,
-}));
+export const FALLBACK_SCRAPERS = [
+  { name: "ManoMano", source: "scraper_manomano" as ResultSource }
+];
 
 export async function runFallbackScrapers(
   query: string,
@@ -376,71 +389,57 @@ export async function runFallbackScrapers(
   onResult?: (result: SearchResult, scraperName: string) => void,
   onDebug?: (category: string, message: string) => void
 ): Promise<{ results: SearchResult[]; stats: { success: string[]; blocked: string[] } }> {
-  const startAll = Date.now();
-  const candidates: SearchResult[] = [];
-  const stats = { success: [] as string[], blocked: [] as string[] };
-
-  if (onDebug) onDebug("pipeline", "Starting fallback pipeline");
-
-  // 1. DuckDuckGo Discovery
-  const ddgResults = await discoverViaDuckDuckGo(query, product);
-  candidates.push(...ddgResults);
-  if (onDebug) onDebug("pipeline", `DuckDuckGo found ${ddgResults.length} links`);
-
-  // 2. Merchants Search Discovery
-  for (const merchant of MERCHANTS) {
-    if (existingEnseignes.has(merchant.name)) continue;
-    const mResults = await discoverViaMerchantSearch(merchant.name, merchant.searchPattern, product, onDebug);
-    candidates.push(...mResults);
-    await randomDelay();
-  }
-
-  if (onDebug) onDebug("pipeline", `Total candidates discovered: ${candidates.length}`);
-
-  // 3. Filtrage et Scraping sélectif
-  const sortedCandidates = candidates.sort((a, b) => (b.relevance_score ?? 0) - (a.relevance_score ?? 0));
   
-  const bestPerEnseigne = new Map<string, SearchResult>();
-  for (const c of sortedCandidates) {
-    if (!bestPerEnseigne.has(c.enseigne)) {
-      bestPerEnseigne.set(c.enseigne, c);
-    }
-  }
-
-  const resultsToProcess = Array.from(bestPerEnseigne.values())
-    .filter(c => {
-      const isGood = (c.relevance_score ?? 0) >= 20;
-      if (!isGood && onDebug) {
-        onDebug("candidate_reject", `${c.enseigne} | Score too low: ${c.relevance_score}% | ${c.lien.substring(0, 40)}`);
+  const searchUrl = `https://www.manomano.fr/recherche/${encodeURIComponent(query)}`;
+  console.log(`[MINIMAL] Searching ManoMano: ${searchUrl}`);
+  
+  try {
+    const html = await fetchMinimal(searchUrl);
+    const $ = cheerio.load(html);
+    
+    // On cherche le premier lien qui ressemble à un produit
+    let productUrl: string | null = null;
+    $('a[href*="/p/"]').each((_, el) => {
+      if (productUrl) return;
+      let href = $(el).attr('href');
+      if (href && !href.includes('recherche')) {
+        productUrl = href.startsWith('http') ? href : `https://www.manomano.fr${href}`;
       }
-      return isGood;
-    })
-    .slice(0, 5);
+    });
 
-  if (onDebug) onDebug("pipeline", `Processing ${resultsToProcess.length} best candidates`);
+    if (!productUrl) {
+      console.log("[MINIMAL] No product link found on ManoMano");
+      return { results: [], stats: { success: [], blocked: [] } };
+    }
 
-  const finalResults: SearchResult[] = [];
-  await Promise.all(resultsToProcess.map(async (r) => {
-    const res = await scrapeUrl(r.lien, r.enseigne, product);
-    if (res.success && res.result) {
-      const finalScore = res.result.relevance_score ?? 0;
+    console.log(`[MINIMAL] Product found: ${productUrl}`);
+    const productHtml = await fetchMinimal(productUrl);
+    const $p = cheerio.load(productHtml);
+    
+    const extraction = extractGenericHTML(productHtml, $p);
+    
+    if (extraction.prix) {
+      const result: SearchResult = {
+        enseigne: "ManoMano",
+        titre: extraction.titre || "Produit ManoMano",
+        prix: extraction.prix,
+        prix_status: "detected",
+        lien: productUrl,
+        source: "scraper_manomano",
+        image_url: extraction.image,
+        retrieved_at: new Date().toISOString(),
+      };
       
-      if (finalScore >= 35) {
-        if (onDebug) onDebug("candidate_accept", `${r.enseigne} | Validated: ${finalScore}% | ${res.result.prix}€`);
-        finalResults.push(res.result);
-        if (onResult) onResult(res.result, r.enseigne);
-        stats.success.push(r.enseigne);
-      } else {
-        if (onDebug) onDebug("candidate_reject", `${r.enseigne} | Match score too low: ${finalScore}%`);
-      }
-    } else if (res.blocked) {
-      if (onDebug) onDebug("error", `${r.enseigne} | BLOCKED`);
-      stats.blocked.push(r.enseigne);
-    } else {
-      if (onDebug) onDebug("error", `${r.enseigne} | Extraction failed`);
+      console.log(`[MINIMAL] SUCCESS: ${extraction.prix}€`);
+      if (onResult) onResult(result, "ManoMano");
+      return { results: [result], stats: { success: ["ManoMano"], blocked: [] } };
     }
-  }));
 
-  if (onDebug) onDebug("pipeline", `Fallback finished. Results: ${finalResults.length}`);
-  return { results: finalResults, stats };
+    console.log("[MINIMAL] Price extraction failed on product page");
+    return { results: [], stats: { success: [], blocked: [] } };
+
+  } catch (err: any) {
+    console.log(`[MINIMAL] Error: ${err.message}`);
+    return { results: [], stats: { success: [], blocked: [] } };
+  }
 }
