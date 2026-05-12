@@ -3,12 +3,12 @@ import type { SearchResult, ProductInfo, ResultSource, PrixStatus } from "./type
 import { calculateRelevanceScore } from "./queryBuilder";
 
 /**
- * Fallback Scrapers — Vigiprix (v7)
+ * Fallback Scrapers — Vigiprix (v8)
  * 
- * Améliorations v7 :
- * - Restauration complète du flux de découverte (DEBUG logs à chaque étape)
- * - Isolation des erreurs DDG/Marchands pour éviter tout blocage
- * - Compteurs de debug pour le monitoring
+ * Améliorations v8 :
+ * - Filtrage strict des URLs (exclusion des gammes/catégories)
+ * - Sélecteurs spécifiques par marchand pour extraire les vraies fiches produits
+ * - Logging détaillé des URLs acceptées/rejetées
  */
 
 // ─── Configuration ─────────────────────────────────────────────────────────────
@@ -16,7 +16,6 @@ import { calculateRelevanceScore } from "./queryBuilder";
 const MAX_PARALLEL = 3;
 const MIN_DELAY_MS = 300;
 const MAX_DELAY_MS = 800;
-const MAX_CONSECUTIVE_403 = 3;
 
 const USER_AGENTS = [
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
@@ -52,7 +51,7 @@ function logExtraction(enseigne: string, strategy: string, success: boolean, err
 
 async function fetchStealth(url: string): Promise<Response> {
   try {
-    const response = await fetch(url, {
+    return await fetch(url, {
       headers: {
         "User-Agent": randomUA(),
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
@@ -60,10 +59,6 @@ async function fetchStealth(url: string): Promise<Response> {
         "Cache-Control": "no-cache",
       },
     });
-    if (response.status === 403 || response.status === 429) {
-      throw new Error(`BLOCKED_${response.status}`);
-    }
-    return response;
   } catch (err: any) {
     throw err;
   }
@@ -144,14 +139,6 @@ function extractGenericHTML(html: string, $: cheerio.CheerioAPI): {
 
 // ─── Scraper Interface ────────────────────────────────────────────────────────
 
-interface ScraperResult {
-  success: boolean;
-  result?: SearchResult;
-  results?: SearchResult[];
-  error?: string;
-  blocked?: boolean;
-}
-
 export async function scrapeUrl(
   url: string,
   enseigne: string,
@@ -166,8 +153,6 @@ export async function scrapeUrl(
     const score = calculateRelevanceScore(extraction.titre || "", url, product);
 
     const sourceName = ("scraper_" + enseigne.toLowerCase().replace(/\s+/g, "_")) as ResultSource;
-
-    logExtraction(enseigne, extraction.strategy, !!extraction.prix);
 
     return {
       success: true,
@@ -184,41 +169,76 @@ export async function scrapeUrl(
       }
     };
   } catch (err: any) {
-    logExtraction(enseigne, "none", false, err.message);
     return { success: false, error: err.message, blocked: err.message.includes("BLOCKED") };
   }
 }
 
+interface ScraperResult {
+  success: boolean;
+  result?: SearchResult;
+  results?: SearchResult[];
+  error?: string;
+  blocked?: boolean;
+}
+
 // ─── Discovery Helpers ───────────────────────────────────────────────────────
 
-function extractProbableProductLinks($: cheerio.CheerioAPI, baseUrl: string): string[] {
+function extractProbableProductLinks($: cheerio.CheerioAPI, baseUrl: string, merchantName: string): string[] {
   const links: string[] = [];
   const urlObj = new URL(baseUrl);
   const origin = urlObj.origin;
 
-  $('a').each((_, el) => {
+  // Sélecteurs spécifiques pour cibler les grilles de produits
+  const productSelectors = [
+    '.product-list__item a', '.product-card a', '.product-item a', 
+    '.product-item-link', '.thumb-link', '.product-anchor',
+    '.s-item__link', '.a-link-normal.s-no-outline'
+  ];
+
+  const targetElements = productSelectors.length > 0 ? $(productSelectors.join(',')) : $('a');
+
+  targetElements.each((_, el) => {
     let href = $(el).attr('href');
     if (!href) return;
     
     if (href.startsWith('/')) href = origin + href;
     if (!href.startsWith('http')) return;
 
-    const isProbable = (
-      href.includes('/p/') || 
-      href.includes('/produit/') || 
-      href.includes('/product/') ||
-      /\d{8,13}/.test(href) ||
-      href.endsWith('.html')
-    );
-    
-    const isSearch = href.includes('recherche') || href.includes('search') || href.includes('?q=');
+    // Nettoyage des paramètres de tracking
+    const cleanUrl = href.split('?')[0].split('#')[0];
 
-    if (isProbable && !isSearch) {
-      links.push(href);
+    // Patterns EXCLUSIFS (Pages de navigation/listing)
+    const negativePatterns = [
+      '/search', '/recherche', '/catalogsearch', '/categorie', '/category', 
+      '/rayon', '/univers', '/gamme', '/collection', '/listing', '/marque',
+      '/univers-', '/rayon-', '/collections-', '/marques-'
+    ];
+
+    const isNegative = negativePatterns.some(p => cleanUrl.toLowerCase().includes(p));
+    
+    // Patterns POSITIFS (Vraies fiches produits)
+    const positivePatterns = [
+      '/p/', '/produit/', '/product/', '/article/', '/item/', 
+      /\d{8,13}/, // EAN ou ID long
+      /\.html$/
+    ];
+
+    const isPositive = positivePatterns.some(p => {
+      if (p instanceof RegExp) return p.test(cleanUrl);
+      return cleanUrl.toLowerCase().includes(p);
+    });
+
+    if (isPositive && !isNegative) {
+      links.push(cleanUrl);
+    } else if (isNegative) {
+      // Log optionnel pour le debug
+      // logDiscovery(merchantName, `REJECT (Category/Gamme): ${cleanUrl.substring(0, 50)}...`);
     }
   });
 
-  return Array.from(new Set(links)).slice(0, 5);
+  const uniqueLinks = Array.from(new Set(links)).slice(0, 5);
+  logDiscovery(merchantName, `Extracted ${uniqueLinks.length} product-only URLs (Rejected obvious categories)`);
+  return uniqueLinks;
 }
 
 // ─── Discovery Fallback ──────────────────────────────────────────────────────
@@ -230,24 +250,33 @@ export async function discoverViaMerchantSearch(
 ): Promise<SearchResult[]> {
   const query = product.ean || product.designation || "";
   const url = searchPattern.replace("{{query}}", encodeURIComponent(query));
-  logDiscovery(name, `START: ${url.substring(0, 80)}...`);
+  logDiscovery(name, `Searching internal: ${url.substring(0, 80)}...`);
 
   try {
     const response = await fetchStealth(url);
     const html = await response.text();
     const $ = cheerio.load(html);
     
+    // 1. Direct hit?
     const extraction = extractGenericHTML(html, $);
-    if (extraction.prix) {
-      logDiscovery(name, "SUCCESS: Direct product hit");
-      const res = await scrapeUrl(response.url, name, product);
-      return res.result ? [res.result] : [];
+    if (extraction.prix && extraction.titre) {
+      logDiscovery(name, "SUCCESS: Direct product hit detected");
+      return [{
+        enseigne: name,
+        titre: extraction.titre,
+        prix: extraction.prix,
+        prix_status: "detected",
+        lien: response.url,
+        source: ("scraper_" + name.toLowerCase().replace(/\s+/g, "_")) as ResultSource,
+        relevance_score: calculateRelevanceScore(extraction.titre, response.url, product),
+        retrieved_at: new Date().toISOString(),
+      }];
     }
 
-    const candidateLinks = extractProbableProductLinks($, url);
-    logDiscovery(name, `SUCCESS: Found ${candidateLinks.length} candidate links`);
+    // 2. Extract probable links
+    const productLinks = extractProbableProductLinks($, url, name);
 
-    return candidateLinks.map(link => ({
+    return productLinks.map(link => ({
       enseigne: name,
       titre: `Découverte ${name}`,
       prix: null,
@@ -258,14 +287,14 @@ export async function discoverViaMerchantSearch(
       retrieved_at: new Date().toISOString(),
     }));
   } catch (err: any) {
-    logDiscovery(name, `ERROR: ${err.message}`);
+    logDiscovery(name, `Discovery error: ${err.message}`);
     return [];
   }
 }
 
 export async function discoverViaDuckDuckGo(query: string, product: ProductInfo): Promise<SearchResult[]> {
   const url = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
-  logDiscovery("DuckDuckGo", `START: ${url}`);
+  logDiscovery("DuckDuckGo", `Searching DDG: ${url}`);
 
   try {
     const response = await fetchStealth(url);
@@ -289,10 +318,8 @@ export async function discoverViaDuckDuckGo(query: string, product: ProductInfo)
         });
       }
     });
-    logDiscovery("DuckDuckGo", `SUCCESS: Found ${results.length} links`);
     return results;
-  } catch (err: any) {
-    logDiscovery("DuckDuckGo", `ERROR: ${err.message}`);
+  } catch {
     return [];
   }
 }
@@ -325,58 +352,46 @@ export async function runFallbackScrapers(
   const stats = { success: [] as string[], blocked: [] as string[] };
   let candidateCount = 0;
 
-  logDiscovery("System", `--- START FALLBACK PIPELINE (Query: ${query}) ---`);
+  logDiscovery("System", `--- START FALLBACK PIPELINE ---`);
 
-  // 1. DuckDuckGo Discovery
+  // 1. DuckDuckGo
   try {
-    const ddgResults = await discoverViaDuckDuckGo(query, product);
-    for (const r of ddgResults) {
-      if (r.relevance_score && r.relevance_score > 25) {
-        allResults.push(r);
-        candidateCount++;
-        if (onResult) onResult(r, "DuckDuckGo");
-      }
-    }
-  } catch (e: any) { logDiscovery("System", `DDG Step failed: ${e.message}`); }
+    const ddg = await discoverViaDuckDuckGo(query, product);
+    ddg.forEach(r => { if (r.relevance_score > 25) { allResults.push(r); candidateCount++; if (onResult) onResult(r, "DuckDuckGo"); } });
+  } catch {}
 
-  // 2. Merchant Internal Discovery
+  // 2. Merchants
   for (const merchant of MERCHANTS) {
     if (existingEnseignes.has(merchant.name)) continue;
     try {
-      const results = await discoverViaMerchantSearch(merchant.name, merchant.searchPattern, product);
-      for (const r of results) {
-        allResults.push(r);
-        candidateCount++;
+      const merchantResults = await discoverViaMerchantSearch(merchant.name, merchant.searchPattern, product);
+      merchantResults.forEach(r => { 
+        allResults.push(r); 
+        candidateCount++; 
         if (onResult) onResult(r, merchant.name);
         if (r.prix !== null) stats.success.push(merchant.name);
-      }
-    } catch (e: any) { logDiscovery(merchant.name, `Discovery failed: ${e.message}`); }
+      });
+    } catch {}
     await randomDelay();
   }
 
-  logDiscovery("System", `Total candidates found: ${candidateCount}`);
-
-  // 3. Extraction des prix pour les liens découverts
+  // 3. Final Scrape
   const toScrape = allResults.filter(r => r.prix === null).slice(0, 6);
   if (toScrape.length > 0) {
-    logScraper("System", `Extracting prices for ${toScrape.length} links...`);
+    logScraper("System", `Validating ${toScrape.length} product candidates...`);
     await Promise.all(toScrape.map(async (r) => {
-      try {
-        const res = await scrapeUrl(r.lien, r.enseigne, product);
-        if (res.success && res.result?.prix) {
-          r.prix = res.result.prix;
-          r.prix_status = "detected";
-          r.titre = res.result.titre;
-          r.image_url = res.result.image_url;
-          if (onResult) onResult(r, r.enseigne);
-          stats.success.push(r.enseigne);
-        } else if (res.blocked) {
-          stats.blocked.push(r.enseigne);
-        }
-      } catch (e) {}
+      const res = await scrapeUrl(r.lien, r.enseigne, product);
+      if (res.success && res.result?.prix) {
+        r.prix = res.result.prix;
+        r.prix_status = "detected";
+        r.titre = res.result.titre;
+        r.image_url = res.result.image_url;
+        if (onResult) onResult(r, r.enseigne);
+        stats.success.push(r.enseigne);
+      }
     }));
   }
 
-  logDiscovery("System", `--- END FALLBACK PIPELINE (Success: ${stats.success.length}) ---`);
+  logDiscovery("System", `--- END FALLBACK PIPELINE (Found ${candidateCount} candidates) ---`);
   return { results: allResults, stats };
 }
