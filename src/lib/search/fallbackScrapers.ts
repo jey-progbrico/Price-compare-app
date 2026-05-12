@@ -211,9 +211,10 @@ export async function discoverViaMerchantSearch(
     const selectors = [
       '.product-list__item a', '.prd__link', // Leroy Merlin
       '.product-card a', '.product-link',     // Brico Dépôt
-      '[data-test="product-card"] a',         // ManoMano
+      '[data-test="product-card"] a',         // ManoMano / Castorama
       '.product-item-link', '.product-title a', // Bricomarché / Generic
       'a[href*="/p/"]', 'a[href*="/pr/"]',    // Patterns profonds
+      'a[href*="/produits/"]',                // Castorama products
       'a[href*="/produit/"]', 'a[href*="/article/"]'
     ];
 
@@ -326,6 +327,7 @@ export async function discoverViaDuckDuckGo(query: string, product: ProductInfo)
 const MERCHANTS = [
   { name: "Leroy Merlin", searchPattern: "https://www.leroymerlin.fr/recherche?q={{query}}" },
   { name: "Brico Dépôt", searchPattern: "https://www.bricodepot.fr/recherche/search.jsp?query={{query}}" },
+  { name: "Castorama", searchPattern: "https://www.castorama.fr/search?q={{query}}" },
   { name: "ManoMano", searchPattern: "https://www.manomano.fr/recherche/{{query}}" },
   { name: "Bricomarché", searchPattern: "https://www.bricomarche.com/recherche?text={{query}}" },
 ];
@@ -374,7 +376,13 @@ export async function runFallbackScrapers(
   }
 
   const resultsToProcess = Array.from(bestPerEnseigne.values())
-    .filter(c => (c.relevance_score ?? 0) >= 20) // Seuil abaissé pour découverte
+    .filter(c => {
+      const isGood = (c.relevance_score ?? 0) >= 20;
+      if (!isGood) {
+        console.log(`[FALLBACK REJECT] ${c.enseigne} | Discovery score too low: ${c.relevance_score}% | URL: ${c.lien.substring(0, 60)}...`);
+      }
+      return isGood;
+    })
     .slice(0, 5);
 
   console.log(`[FALLBACK] Processing ${resultsToProcess.length} candidates meeting 20% threshold...`);
@@ -387,14 +395,18 @@ export async function runFallbackScrapers(
       
       // SEUIL DE QUALITÉ ÉQUILIBRÉ : 35% minimum pour être affiché
       if (finalScore >= 35) {
+        console.log(`[FALLBACK ACCEPT] ${r.enseigne} | Final Score: ${finalScore}% | Price: ${res.result.prix}€ | Title: ${res.result.titre?.substring(0, 40)}...`);
         finalResults.push(res.result);
         if (onResult) onResult(res.result, r.enseigne);
         stats.success.push(r.enseigne);
       } else {
-        console.log(`[FALLBACK REJECT] ${r.enseigne} | Score too low: ${finalScore}% (Threshold 35%) | ${r.lien.substring(0, 50)}...`);
+        console.log(`[FALLBACK REJECT] ${r.enseigne} | Match score too low after extraction: ${finalScore}% (Threshold 35%) | Title: ${res.result.titre?.substring(0, 40)}... | URL: ${r.lien.substring(0, 60)}`);
       }
     } else if (res.blocked) {
+      console.log(`[FALLBACK BLOCKED] ${r.enseigne} | IP might be blocked by merchant | URL: ${r.lien.substring(0, 60)}`);
       stats.blocked.push(r.enseigne);
+    } else {
+      console.log(`[FALLBACK REJECT] ${r.enseigne} | Extraction failed (no price/title found or timeout) | URL: ${r.lien.substring(0, 60)}`);
     }
   }));
 
