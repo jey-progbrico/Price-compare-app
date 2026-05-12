@@ -171,10 +171,11 @@ function extractGenericHTML(html: string, $: cheerio.CheerioAPI): {
   }
 
   if (!image) {
-    image = $('meta[property="og:image"]').attr('content') || 
-            $('meta[name="twitter:image"]').attr('content') ||
-            $('meta[property="product:image:url"]').attr('content');
-  }
+  image = $('meta[property="og:image"]').attr('content') || 
+          $('meta[name="twitter:image"]').attr('content') ||
+          $('meta[property="product:image:url"]').attr('content') ||
+          null;
+}
 
   if (prix) return { prix, titre, image, strategy };
 
