@@ -125,6 +125,28 @@ function extractGenericHTML(html: string, $: cheerio.CheerioAPI): {
     }
   }
 
+  // Fallback: Extraction via JSON __NEXT_DATA__ ou similar
+  if (!prix && html.includes("__NEXT_DATA__")) {
+    try {
+      const match = html.match(/<script id="__NEXT_DATA__" type="application\/json">([\s\S]*?)<\/script>/);
+      if (match && match[1]) {
+        const data = JSON.parse(match[1]);
+        // Tentative d'extraction récursive simple
+        const findPrice = (obj: any): any => {
+          if (!obj || typeof obj !== "object") return;
+          if (obj.price && typeof obj.price === "number") return obj.price;
+          if (obj.priceValue && typeof obj.priceValue === "number") return obj.priceValue;
+          for (const k in obj) {
+            const res = findPrice(obj[k]);
+            if (res) return res;
+          }
+        };
+        const p = findPrice(data);
+        if (p) { prix = p; strategy = "next-data"; }
+      }
+    } catch {}
+  }
+
   return { prix, titre, image, strategy };
 }
 
@@ -194,7 +216,14 @@ export async function discoverViaMerchantSearch(
     const html = await response.text();
     const $ = cheerio.load(html);
     
-    console.log(`[MERCHANT SEARCH DEBUG] ${name} | HTML Length: ${html.length} | Status: ${response.status}`);
+    console.log(`[MERCHANT SEARCH DEBUG] ${name} | Status: ${response.status} | Length: ${html.length}`);
+    console.log(`[MERCHANT SEARCH HTML] ${name} | Snippet: ${html.substring(0, 500).replace(/\s+/g, " ")}`);
+
+    // Détection de pages JS-only
+    const isJSOnly = html.includes("id=\"__NEXT_DATA__\"") || html.includes("window.__INITIAL_STATE__") || html.includes("root-react");
+    if (isJSOnly) {
+      console.log(`[MERCHANT SEARCH DEBUG] ${name} | JS-only page detected (Next.js/React state present)`);
+    }
 
     // Direct hit?
     const extraction = extractGenericHTML(html, $);
@@ -217,6 +246,11 @@ export async function discoverViaMerchantSearch(
       'a[href*="/produits/"]',                // Castorama products
       'a[href*="/produit/"]', 'a[href*="/article/"]'
     ];
+
+    selectors.forEach(sel => {
+      const matches = $(sel).length;
+      if (matches > 0) console.log(`[MERCHANT SEARCH DEBUG] ${name} | Selector "${sel}" matched ${matches} times`);
+    });
 
     let anchorCount = 0;
     $(selectors.join(', ')).each((_, el) => {
