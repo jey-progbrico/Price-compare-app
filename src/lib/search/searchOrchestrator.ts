@@ -129,7 +129,7 @@ export async function runSearch(
 
   // ─── ÉTAPE 3 : Scrapers fallback ─────────────────────────────────────────
 
-  console.log(`[Orchestrator] Starting Step 3: Fallback Discovery & Scrapers`);
+  console.log(`[PIPELINE] Entering Step 3 (Fallback Discovery)`);
   const existingEnseignes = new Set(allResults.map(r => r.enseigne));
   const queries = buildSearchQueries(product);
   const bestQuery = (
@@ -139,7 +139,7 @@ export async function runSearch(
     product.ean
   );
 
-  console.log(`[Orchestrator] Best query for fallback: "${bestQuery}"`);
+  console.log(`[PIPELINE] Best fallback query identified: "${bestQuery}"`);
 
   const scraperSources = FALLBACK_SCRAPERS.map(s => s.source);
   for (const src of scraperSources) {
@@ -148,14 +148,14 @@ export async function runSearch(
   }
 
   try {
-    console.log(`[Orchestrator] Calling runFallbackScrapers...`);
+    const fallbackStart = Date.now();
     const { results: fallbackResults, stats: fallbackStats } =
       await runFallbackScrapers(bestQuery, product, existingEnseignes, (result) => {
-        console.log(`[Orchestrator] Fallback found result: ${result.enseigne} (${result.prix}€)`);
+        console.log(`[PIPELINE] Result discovered: ${result.enseigne} | ${result.prix}€ | Source: ${result.source}`);
         emit({ type: "source_result", source: result.source, result });
       });
 
-    console.log(`[Orchestrator] Fallback finished. Found ${fallbackResults.length} new results.`);
+    console.log(`[PIPELINE] Step 3 complete in ${Date.now() - fallbackStart}ms. Discovered ${fallbackResults.length} new items.`);
 
     for (const src of scraperSources) {
       const scraperName = FALLBACK_SCRAPERS.find(s => s.source === src)?.name || "";
@@ -168,14 +168,14 @@ export async function runSearch(
     allResults.push(...fallbackResults);
     stats.from_scrapers = fallbackResults.length;
   } catch (err: any) {
-    console.error("[Orchestrator] Fallback scrapers error:", err.message);
+    console.log(`[PIPELINE] ERROR in Step 3: ${err.message}`);
   }
 
   // ─── ÉTAPE 4 : Sauvegarde cache ──────────────────────────────────────────
 
   const liveResults = allResults.filter(r => r.source !== "cache");
   if (liveResults.length > 0) {
-    saveResults(product.ean, liveResults).catch(err => console.error("[Orchestrator] saveResults error:", err.message));
+    saveResults(product.ean, liveResults).catch(err => console.error("[PIPELINE] Cache save error:", err.message));
   }
 
   // ─── ÉTAPE 5 : Fin ───────────────────────────────────────────────────────
@@ -185,6 +185,7 @@ export async function runSearch(
   stats.without_price = allResults.filter(r => r.prix === null).length;
   stats.duration_ms = Date.now() - startTime;
 
+  console.log(`[PIPELINE] COMPLETE | Total results: ${stats.total_results} | Duration: ${stats.duration_ms}ms`);
   emit({ type: "done", results: allResults, stats });
   return { results: allResults, stats };
 }
