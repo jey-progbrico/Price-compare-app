@@ -187,39 +187,89 @@ export async function discoverViaMerchantSearch(
   const query = product.ean || product.designation || "";
   const url = searchPattern.replace("{{query}}", encodeURIComponent(query));
   
-  console.log(`[MERCHANT SEARCH START] ${name} | ${url.substring(0, 60)}...`);
+  console.log(`[MERCHANT SEARCH START] ${name} | URL: ${url}`);
 
   try {
     const response = await fetchStealth(url);
     const html = await response.text();
     const $ = cheerio.load(html);
     
+    console.log(`[MERCHANT SEARCH DEBUG] ${name} | HTML Length: ${html.length} | Status: ${response.status}`);
+
     // Direct hit?
     const extraction = extractGenericHTML(html, $);
-    if (extraction.prix && extraction.titre) {
-      console.log(`[MERCHANT SEARCH SUCCESS] ${name} | DIRECT HIT | ${Date.now() - start}ms`);
+    if (extraction.prix && extraction.titre && !html.includes("recherche") && !html.includes("search")) {
+      console.log(`[MERCHANT SEARCH SUCCESS] ${name} | DIRECT HIT detected | ${Date.now() - start}ms`);
       const res = await scrapeUrl(response.url, name, product);
       return res.result ? [res.result] : [];
     }
 
-    // Candidate links
+    // Extraction des liens via sélecteurs spécifiques
     const links: string[] = [];
     const origin = new URL(url).origin;
-    $('a').each((_, el) => {
+
+    const selectors = [
+      '.product-list__item a', '.prd__link', // Leroy Merlin
+      '.product-card a', '.product-link',     // Brico Dépôt
+      '[data-test="product-card"] a',         // ManoMano
+      '.product-item-link', '.product-title a', // Bricomarché / Generic
+      'a[href*="/p/"]', 'a[href*="/pr/"]',    // Patterns profonds
+      'a[href*="/produit/"]', 'a[href*="/article/"]'
+    ];
+
+    let anchorCount = 0;
+    $(selectors.join(', ')).each((_, el) => {
       let href = $(el).attr('href');
       if (!href) return;
       if (href.startsWith('/')) href = origin + href;
       if (!href.startsWith('http')) return;
+      
       const cleanUrl = href.split('?')[0].split('#')[0].toLowerCase();
-      
-      const isNeg = ['/search', '/recherche', '/categorie', '/univers', '/gamme', '/collection'].some(p => cleanUrl.includes(p));
-      const isPos = ['/p/', '/produit/', '/product/', /\d{8,13}/, /\.html$/].some(p => typeof p === 'string' ? cleanUrl.includes(p) : p.test(cleanUrl));
-      
-      if (isPos && !isNeg) links.push(href.split('?')[0]);
+      anchorCount++;
+
+      // Heuristiques de validation de lien produit
+      const isNeg = [
+        '/search', '/recherche', '/categorie', '/univers', '/gamme', 
+        '/collection', '/rayon', '/listing', '?q=', 'filter='
+      ].some(p => cleanUrl.includes(p));
+
+      const isPos = [
+        '/p/', '/pr/', '/produit/', '/product/', '/article/', 
+        /\d{6,13}/, /\.html$/, /\/[a-z0-9-]+-[0-9]{5,}/
+      ].some(p => typeof p === 'string' ? cleanUrl.includes(p) : p.test(cleanUrl));
+
+      if (isPos && !isNeg) {
+        links.push(href.split('?')[0]);
+      }
     });
 
-    const candidateLinks = Array.from(new Set(links)).slice(0, 4);
-    console.log(`[MERCHANT SEARCH SUCCESS] ${name} | Found ${candidateLinks.length} candidates | ${Date.now() - start}ms`);
+    // Fallback: si rien trouvé via sélecteurs, on check TOUS les liens
+    if (links.length === 0) {
+      console.log(`[MERCHANT SEARCH DEBUG] ${name} | No results via selectors, falling back to all anchors...`);
+      $('a').each((_, el) => {
+        let href = $(el).attr('href');
+        if (!href || href.length < 10) return;
+        if (href.startsWith('/')) href = origin + href;
+        if (!href.startsWith('http') || href.includes(origin + '/#')) return;
+
+        const cleanUrl = href.split('?')[0].split('#')[0].toLowerCase();
+        const isNeg = ['/search', '/recherche', '/categorie', '/univers', '/gamme'].some(p => cleanUrl.includes(p));
+        const isPos = ['/p/', '/pr/', '/produit/', /\.html$/].some(p => cleanUrl.includes(p));
+        
+        if (isPos && !isNeg) links.push(href.split('?')[0]);
+      });
+    }
+
+    const uniqueLinks = Array.from(new Set(links));
+    console.log(`[MERCHANT SEARCH DEBUG] ${name} | Anchors checked: ${anchorCount} | Candidates found: ${uniqueLinks.length}`);
+    
+    const candidateLinks = uniqueLinks.slice(0, 4);
+    if (candidateLinks.length > 0) {
+      console.log(`[MERCHANT SEARCH SUCCESS] ${name} | Found ${candidateLinks.length} valid candidates | ${Date.now() - start}ms`);
+      candidateLinks.forEach(l => console.log(`   -> ${l.substring(0, 80)}`));
+    } else {
+      console.log(`[MERCHANT SEARCH SUCCESS] ${name} | NO candidates found | ${Date.now() - start}ms`);
+    }
 
     return candidateLinks.map(link => ({
       enseigne: name,
