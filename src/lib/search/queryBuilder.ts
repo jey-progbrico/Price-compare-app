@@ -179,7 +179,7 @@ export function detectHtmlProductSignals(html: string): {
   return { score: Math.min(1.0, score), signals };
 }
 
-// ─── Scoring de Pertinence ───────────────────────────────────────────────────
+// ─── Scoring de Pertinence (v8 - Stricte) ───────────────────────────────────
 
 export function calculateRelevanceScore(
   foundTitle: string,
@@ -187,42 +187,66 @@ export function calculateRelevanceScore(
   product: ProductInfo,
   htmlSignalsScore = 0
 ): number {
-  if (!foundTitle) return 20; // Score minimal pour ne pas rejeter
+  if (!foundTitle) return 10;
 
-  const titleLower = foundTitle.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  const titleClean = foundTitle.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, " ");
+  const urlLower = url.toLowerCase();
   const urlProb = estimateProductPageProbability(url, product);
 
   let score = 0;
-  let maxPossible = 0;
+  let matches = [];
 
-  // Match EAN ou Référence (Signal fort)
-  if (product.ean && (titleLower.includes(product.ean) || url.includes(product.ean))) {
-    score += 80;
-    maxPossible += 80;
+  // 1. EAN (Signal ABSOLU : 100 pts)
+  if (product.ean && (titleClean.includes(product.ean) || urlLower.includes(product.ean))) {
+    score += 100;
+    matches.push("EAN");
   }
 
+  // 2. Référence Fabricant (Signal FORT : 60 pts)
   if (product.reference_fabricant) {
-    maxPossible += 40;
-    const ref = product.reference_fabricant.toLowerCase();
-    if (titleLower.includes(ref) || url.toLowerCase().includes(ref)) score += 40;
+    const ref = product.reference_fabricant.toLowerCase().replace(/[^a-z0-9]/g, "");
+    const titleRef = titleClean.replace(/\s/g, "");
+    if (titleRef.includes(ref) || urlLower.replace(/[^a-z0-9]/g, "").includes(ref)) {
+      score += 60;
+      matches.push("REF");
+    }
   }
 
-  // Marque (20 pts)
+  // 3. Marque (Obligatoire pour un score élevé : 20 pts)
   if (product.marque) {
-    maxPossible += 20;
-    if (titleLower.includes(product.marque.toLowerCase())) score += 20;
+    const brand = product.marque.toLowerCase();
+    if (titleClean.includes(brand) || urlLower.includes(brand)) {
+      score += 20;
+      matches.push("BRAND");
+    } else {
+      score -= 30; // Pénalité si marque absente mais définie
+    }
   }
 
-  // Désignation (20 pts)
+  // 4. Désignation / Mots-clés techniques (30 pts)
   if (product.designation) {
-    maxPossible += 20;
-    const keywords = extractKeywords(product.designation, 5).split(" ");
-    const matchCount = keywords.filter(k => k && titleLower.includes(k)).length;
-    score += (matchCount / Math.max(keywords.length, 1)) * 20;
+    const keywords = extractKeywords(product.designation, 6).split(" ");
+    const matchCount = keywords.filter(k => k.length > 2 && titleClean.includes(k)).length;
+    const ratio = matchCount / Math.max(keywords.length, 1);
+    score += ratio * 30;
+    if (ratio > 0.5) matches.push("KEYWORDS");
   }
 
-  const baseScore = maxPossible > 0 ? (score / maxPossible) * 100 : 40;
+  // 5. Normalisation
+  // Un match parfait EAN + BRAND + REF peut dépasser 100, on plafonne plus tard.
   
-  // Combinaison finale tolérante
-  return Math.min(100, Math.round(baseScore * 0.7 + urlProb.probability * 20 + htmlSignalsScore * 10));
+  const finalScore = Math.round(
+    score * 0.7 + 
+    urlProb.probability * 20 + 
+    htmlSignalsScore * 10
+  );
+
+  const cappedScore = Math.min(100, Math.max(0, finalScore));
+
+  // Log détaillé (si score significatif)
+  if (cappedScore > 20) {
+    console.log(`[SCORING] "${foundTitle.substring(0, 40)}..." | Score: ${cappedScore}% | Matches: ${matches.join(", ")}`);
+  }
+
+  return cappedScore;
 }

@@ -342,52 +342,62 @@ export async function runFallbackScrapers(
   onResult?: (result: SearchResult, scraperName: string) => void
 ): Promise<{ results: SearchResult[]; stats: { success: string[]; blocked: string[] } }> {
   const startAll = Date.now();
-  const allResults: SearchResult[] = [];
+  const candidates: SearchResult[] = [];
   const stats = { success: [] as string[], blocked: [] as string[] };
-  let candidateCount = 0;
 
   console.log(`[FALLBACK START] Starting complete fallback pipeline...`);
 
-  // 1. DuckDuckGo
+  // 1. DuckDuckGo Discovery
   const ddgResults = await discoverViaDuckDuckGo(query, product);
-  ddgResults.forEach(r => { 
-    if ((r.relevance_score ?? 0) > 25) { 
-      allResults.push(r); candidateCount++; 
-      if (onResult) onResult(r, "DuckDuckGo"); 
-    } 
-  });
+  candidates.push(...ddgResults);
 
-  // 2. Merchants Search
+  // 2. Merchants Search Discovery
   for (const merchant of MERCHANTS) {
     if (existingEnseignes.has(merchant.name)) continue;
     const mResults = await discoverViaMerchantSearch(merchant.name, merchant.searchPattern, product);
-    mResults.forEach(r => { 
-      allResults.push(r); candidateCount++; 
-      if (onResult) onResult(r, merchant.name);
-      if (r.prix !== null) stats.success.push(merchant.name);
-    });
+    candidates.push(...mResults);
     await randomDelay();
   }
 
-  // 3. Extraction des prix
-  const toScrape = allResults.filter(r => r.prix === null).slice(0, 5);
-  if (toScrape.length > 0) {
-    console.log(`[FALLBACK] Extracting prices for ${toScrape.length} candidates...`);
-    await Promise.all(toScrape.map(async (r) => {
-      const res = await scrapeUrl(r.lien, r.enseigne, product);
-      if (res.success && res.result?.prix) {
-        r.prix = res.result.prix;
-        r.prix_status = "detected";
-        r.titre = res.result.titre;
-        r.image_url = res.result.image_url;
-        if (onResult) onResult(r, r.enseigne);
-        stats.success.push(r.enseigne);
-      } else if (res.blocked) {
-        stats.blocked.push(r.enseigne);
-      }
-    }));
+  console.log(`[FALLBACK] Total candidates discovered: ${candidates.length}`);
+
+  // 3. Filtrage et Scraping sélectif
+  // On trie par score de pertinence décroissant
+  const sortedCandidates = candidates.sort((a, b) => (b.relevance_score ?? 0) - (a.relevance_score ?? 0));
+  
+  // On ne garde que les meilleurs par enseigne
+  const bestPerEnseigne = new Map<string, SearchResult>();
+  for (const c of sortedCandidates) {
+    if (!bestPerEnseigne.has(c.enseigne)) {
+      bestPerEnseigne.set(c.enseigne, c);
+    }
   }
 
-  console.log(`[FALLBACK END] Total duration: ${Date.now() - startAll}ms | Total candidates: ${candidateCount} | Successful extractions: ${stats.success.length}`);
-  return { results: allResults, stats };
+  const resultsToProcess = Array.from(bestPerEnseigne.values())
+    .filter(c => (c.relevance_score ?? 0) > 30) // Seuil minimal pour discovery
+    .slice(0, 5);
+
+  console.log(`[FALLBACK] Processing ${resultsToProcess.length} high-potential candidates...`);
+
+  const finalResults: SearchResult[] = [];
+  await Promise.all(resultsToProcess.map(async (r) => {
+    const res = await scrapeUrl(r.lien, r.enseigne, product);
+    if (res.success && res.result) {
+      const finalScore = res.result.relevance_score ?? 0;
+      
+      // SEUIL DE QUALITÉ STRICT : 45% minimum pour être affiché
+      if (finalScore >= 45) {
+        finalResults.push(res.result);
+        if (onResult) onResult(res.result, r.enseigne);
+        stats.success.push(r.enseigne);
+      } else {
+        console.log(`[FALLBACK REJECT] ${r.enseigne} | Score too low: ${finalScore}% | ${r.lien.substring(0, 50)}...`);
+      }
+    } else if (res.blocked) {
+      stats.blocked.push(r.enseigne);
+    }
+  }));
+
+  console.log(`[FALLBACK END] Duration: ${Date.now() - startAll}ms | Final Valid Results: ${finalResults.length}`);
+  return { results: finalResults, stats };
 }
