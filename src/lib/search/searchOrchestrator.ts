@@ -129,6 +129,7 @@ export async function runSearch(
 
   // ─── ÉTAPE 3 : Scrapers fallback ─────────────────────────────────────────
 
+  console.log(`[Orchestrator] Starting Step 3: Fallback Discovery & Scrapers`);
   const existingEnseignes = new Set(allResults.map(r => r.enseigne));
   const queries = buildSearchQueries(product);
   const bestQuery = (
@@ -138,6 +139,8 @@ export async function runSearch(
     product.ean
   );
 
+  console.log(`[Orchestrator] Best query for fallback: "${bestQuery}"`);
+
   const scraperSources = FALLBACK_SCRAPERS.map(s => s.source);
   for (const src of scraperSources) {
     emit({ type: "source_start", source: src, status: "running" });
@@ -145,10 +148,14 @@ export async function runSearch(
   }
 
   try {
+    console.log(`[Orchestrator] Calling runFallbackScrapers...`);
     const { results: fallbackResults, stats: fallbackStats } =
       await runFallbackScrapers(bestQuery, product, existingEnseignes, (result) => {
+        console.log(`[Orchestrator] Fallback found result: ${result.enseigne} (${result.prix}€)`);
         emit({ type: "source_result", source: result.source, result });
       });
+
+    console.log(`[Orchestrator] Fallback finished. Found ${fallbackResults.length} new results.`);
 
     for (const src of scraperSources) {
       const scraperName = FALLBACK_SCRAPERS.find(s => s.source === src)?.name || "";
