@@ -17,7 +17,7 @@ import { calculateRelevanceScore } from "./queryBuilder";
 const MAX_PARALLEL = 3;
 const MIN_DELAY_MS = 200;
 const MAX_DELAY_MS = 500;
-const FETCH_TIMEOUT_MS = 8000; // 8s max par requête
+const FETCH_TIMEOUT_MS = 10000; // 10s max par requête
 
 const USER_AGENTS = [
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
@@ -355,8 +355,6 @@ export async function discoverViaDuckDuckGo(query: string, product: ProductInfo)
 }
 
 // ─── Orchestration Fallback ───────────────────────────────────────────────────
-
-const FETCH_TIMEOUT_MS = 10000;
 
 async function fetchMinimal(url: string): Promise<string> {
   const controller = new AbortController();
