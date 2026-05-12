@@ -22,6 +22,8 @@ export async function GET(request: Request) {
   const ean = searchParams.get("ean");
   const forceRefresh = searchParams.get("force") === "1";
 
+  console.log(`[API] STREAM API CALLED | EAN: ${ean} | Force: ${forceRefresh}`);
+
   if (!ean) {
     return new Response("EAN manquant", { status: 400 });
   }

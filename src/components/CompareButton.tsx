@@ -365,6 +365,7 @@ export default function CompareButton({
   // ─── Démarrage de la recherche SSE ──────────────────────────────────────
 
   const startSearch = (force = false) => {
+    console.log(`[FRONTEND] LIVE SEARCH START | EAN: ${ean} | Force: ${force}`);
     setPhase("searching");
     setError(null);
     if (!force) {
@@ -374,13 +375,20 @@ export default function CompareButton({
 
     setSources(prev => prev.map(s => ({ ...s, status: "pending", count: 0 })));
 
-    if (streamRef.current) streamRef.current.close();
+    if (streamRef.current) {
+      console.log("[FRONTEND] Closing previous stream");
+      streamRef.current.close();
+    }
 
     const url = `/api/search/stream?ean=${encodeURIComponent(ean)}${force ? "&force=1" : ""}`;
+    console.log(`[FRONTEND] STREAM CONNECT | URL: ${url}`);
     const eventSource = new EventSource(url);
     streamRef.current = eventSource;
 
+    eventSource.onopen = () => console.log("[FRONTEND] STREAM OPENED");
+
     eventSource.addEventListener("cache_hit", (e: MessageEvent) => {
+      console.log("[FRONTEND] CACHE HIT received");
       const event = JSON.parse(e.data);
       if (event.results?.length > 0) {
         setResults(event.results.map((r: SearchResult) => ({ ...r, source: "cache", isCached: true })));
@@ -391,14 +399,15 @@ export default function CompareButton({
 
     eventSource.addEventListener("source_start", (e: MessageEvent) => {
       const event = JSON.parse(e.data);
+      console.log(`[FRONTEND] SOURCE START: ${event.source}`);
       if (event.source) updateSource(event.source, { status: "running" });
     });
 
     eventSource.addEventListener("source_result", (e: MessageEvent) => {
       const event = JSON.parse(e.data);
       if (event.result) {
+        console.log(`[FRONTEND] STREAM MESSAGE RECEIVED from ${event.result.enseigne}`);
         setResults(prev => {
-          // Déduplication par enseigne
           if (prev.some(r => r.enseigne === event.result.enseigne)) return prev;
           return [...prev, event.result];
         });
@@ -412,17 +421,20 @@ export default function CompareButton({
 
     eventSource.addEventListener("source_end", (e: MessageEvent) => {
       const event = JSON.parse(e.data);
+      console.log(`[FRONTEND] SOURCE END: ${event.source} | Status: ${event.status}`);
       if (event.source) {
         updateSource(event.source, { status: event.status as SourceStatus || "not_found" });
       }
     });
 
     eventSource.addEventListener("done", () => {
+      console.log("[FRONTEND] STREAM CLOSED (done)");
       setPhase("done");
       eventSource.close();
     });
 
     eventSource.addEventListener("error", (e: MessageEvent) => {
+      console.error("[FRONTEND] STREAM ERROR:", e);
       let msg = "Erreur de connexion.";
       try {
         const data = JSON.parse((e as any).data);
