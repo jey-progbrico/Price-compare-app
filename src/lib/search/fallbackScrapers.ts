@@ -374,10 +374,10 @@ export async function runFallbackScrapers(
   }
 
   const resultsToProcess = Array.from(bestPerEnseigne.values())
-    .filter(c => (c.relevance_score ?? 0) > 30) // Seuil minimal pour discovery
+    .filter(c => (c.relevance_score ?? 0) >= 20) // Seuil abaissé pour découverte
     .slice(0, 5);
 
-  console.log(`[FALLBACK] Processing ${resultsToProcess.length} high-potential candidates...`);
+  console.log(`[FALLBACK] Processing ${resultsToProcess.length} candidates meeting 20% threshold...`);
 
   const finalResults: SearchResult[] = [];
   await Promise.all(resultsToProcess.map(async (r) => {
@@ -385,13 +385,13 @@ export async function runFallbackScrapers(
     if (res.success && res.result) {
       const finalScore = res.result.relevance_score ?? 0;
       
-      // SEUIL DE QUALITÉ STRICT : 45% minimum pour être affiché
-      if (finalScore >= 45) {
+      // SEUIL DE QUALITÉ ÉQUILIBRÉ : 35% minimum pour être affiché
+      if (finalScore >= 35) {
         finalResults.push(res.result);
         if (onResult) onResult(res.result, r.enseigne);
         stats.success.push(r.enseigne);
       } else {
-        console.log(`[FALLBACK REJECT] ${r.enseigne} | Score too low: ${finalScore}% | ${r.lien.substring(0, 50)}...`);
+        console.log(`[FALLBACK REJECT] ${r.enseigne} | Score too low: ${finalScore}% (Threshold 35%) | ${r.lien.substring(0, 50)}...`);
       }
     } else if (res.blocked) {
       stats.blocked.push(r.enseigne);

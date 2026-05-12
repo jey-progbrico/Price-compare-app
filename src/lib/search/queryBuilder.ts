@@ -179,7 +179,7 @@ export function detectHtmlProductSignals(html: string): {
   return { score: Math.min(1.0, score), signals };
 }
 
-// ─── Scoring de Pertinence (v8 - Stricte) ───────────────────────────────────
+// ─── Scoring de Pertinence (v9 - Équilibrée) ───────────────────────────────────
 
 export function calculateRelevanceScore(
   foundTitle: string,
@@ -187,7 +187,7 @@ export function calculateRelevanceScore(
   product: ProductInfo,
   htmlSignalsScore = 0
 ): number {
-  if (!foundTitle) return 10;
+  if (!foundTitle) return 15;
 
   const titleClean = foundTitle.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, " ");
   const urlLower = url.toLowerCase();
@@ -196,55 +196,54 @@ export function calculateRelevanceScore(
   let score = 0;
   let matches = [];
 
-  // 1. EAN (Signal ABSOLU : 100 pts)
+  // 1. EAN (Signal MAJEUR : 100 pts)
   if (product.ean && (titleClean.includes(product.ean) || urlLower.includes(product.ean))) {
     score += 100;
     matches.push("EAN");
   }
 
-  // 2. Référence Fabricant (Signal FORT : 60 pts)
+  // 2. Référence Fabricant (Signal FORT : 50 pts)
   if (product.reference_fabricant) {
     const ref = product.reference_fabricant.toLowerCase().replace(/[^a-z0-9]/g, "");
     const titleRef = titleClean.replace(/\s/g, "");
     if (titleRef.includes(ref) || urlLower.replace(/[^a-z0-9]/g, "").includes(ref)) {
-      score += 60;
+      score += 50;
       matches.push("REF");
     }
   }
 
-  // 3. Marque (Obligatoire pour un score élevé : 20 pts)
+  // 3. Marque (Bonus : 20 pts)
   if (product.marque) {
     const brand = product.marque.toLowerCase();
     if (titleClean.includes(brand) || urlLower.includes(brand)) {
       score += 20;
       matches.push("BRAND");
-    } else {
-      score -= 30; // Pénalité si marque absente mais définie
     }
+    // Suppression de la pénalité lourde — la marque est souvent absente des titres
   }
 
-  // 4. Désignation / Mots-clés techniques (30 pts)
+  // 4. Désignation / Mots-clés techniques (40 pts)
   if (product.designation) {
     const keywords = extractKeywords(product.designation, 6).split(" ");
     const matchCount = keywords.filter(k => k.length > 2 && titleClean.includes(k)).length;
     const ratio = matchCount / Math.max(keywords.length, 1);
-    score += ratio * 30;
-    if (ratio > 0.5) matches.push("KEYWORDS");
+    
+    // Plus généreux sur les mots-clés
+    score += ratio * 40;
+    if (ratio > 0.3) matches.push("KEYWORDS");
   }
 
-  // 5. Normalisation
-  // Un match parfait EAN + BRAND + REF peut dépasser 100, on plafonne plus tard.
-  
+  // 5. Normalisation et Heuristiques
   const finalScore = Math.round(
     score * 0.7 + 
-    urlProb.probability * 20 + 
+    urlProb.probability * 25 + // Plus de poids sur la probabilité d'URL e-commerce
     htmlSignalsScore * 10
   );
 
   const cappedScore = Math.min(100, Math.max(0, finalScore));
 
-  // Log détaillé (si score significatif)
-  if (cappedScore > 20) {
+  // Log détaillé
+  if (cappedScore > 15) {
     console.log(`[SCORING] "${foundTitle.substring(0, 40)}..." | Score: ${cappedScore}% | Matches: ${matches.join(", ")}`);
   }
 
