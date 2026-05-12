@@ -3,27 +3,25 @@ import type { SearchResult, ProductInfo, ResultSource, PrixStatus } from "./type
 import { calculateRelevanceScore, estimateProductPageProbability, detectHtmlProductSignals } from "./queryBuilder";
 
 /**
- * Fallback Scrapers — Vigiprix (v4)
+ * Fallback Scrapers — Vigiprix (v5)
  * 
- * Améliorations v4 :
- * - Détection probabiliste de fiche produit (URL + Signaux HTML)
- * - Validation HTML légère avant extraction complète
+ * Améliorations v5 :
+ * - Découverte alternative via DuckDuckGo HTML
+ * - Extraction ultra-tolérante (JSON-LD, Meta, Sélecteurs)
+ * - Gestion robuste des blocages
  */
 
 // ─── Configuration ─────────────────────────────────────────────────────────────
 
-const MAX_PARALLEL = parseInt(process.env.MAX_PARALLEL_SCRAPERS || "2");
-const MIN_DELAY_MS = parseInt(process.env.MIN_DELAY_MS || "800");
-const MAX_DELAY_MS = parseInt(process.env.MAX_DELAY_MS || "2500");
-const MAX_CONSECUTIVE_403 = parseInt(process.env.MAX_CONSECUTIVE_403 || "2");
-const SCRAPER_TIMEOUT_MS = 15000; // 15s max par scraper
-const MIN_RELEVANCE_SCORE = parseInt(process.env.MIN_RELEVANCE_SCORE || "20");
+const MAX_PARALLEL = 3;
+const MIN_DELAY_MS = 500;
+const MAX_DELAY_MS = 1500;
+const MAX_CONSECUTIVE_403 = 3;
 
 const USER_AGENTS = [
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:125.0) Gecko/20100101 Firefox/125.0",
-  "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
 ];
 
 function randomUA(): string {
@@ -35,48 +33,23 @@ function randomDelay(): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-// ─── Logging Helpers ──────────────────────────────────────────────────────────
-
-function logScraper(enseigne: string, message: string) {
-  console.log(`[Scraper][${enseigne}] ${message}`);
-}
-
-function logExtraction(enseigne: string, strategy: string, success: boolean, error?: string) {
-  const status = success ? "SUCCESS" : "FAILURE";
-  console.log(`[Extraction][${enseigne}] ${status} | Strategy: ${strategy}${error ? ` | Error: ${error}` : ""}`);
-}
-
 // ─── Fetch stealth ────────────────────────────────────────────────────────────
 
 async function fetchStealth(url: string): Promise<Response> {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), SCRAPER_TIMEOUT_MS);
-
   try {
     const response = await fetch(url, {
-      signal: controller.signal,
       headers: {
         "User-Agent": randomUA(),
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
-        "Accept-Language": "fr-FR,fr;q=0.9,en;q=0.7",
-        "Accept-Encoding": "gzip, deflate, br",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "fr-FR,fr;q=0.9",
         "Cache-Control": "no-cache",
-        "Sec-Fetch-Dest": "document",
-        "Sec-Fetch-Mode": "navigate",
-        "Sec-Fetch-Site": "none",
-        "Upgrade-Insecure-Requests": "1",
       },
-      cache: "no-store",
     });
-    clearTimeout(timeout);
-
-    if (response.status === 403 || response.status === 429 || response.status === 503) {
+    if (response.status === 403 || response.status === 429) {
       throw new Error(`BLOCKED_${response.status}`);
     }
     return response;
   } catch (err: any) {
-    clearTimeout(timeout);
-    if (err.name === "AbortError") throw new Error("TIMEOUT");
     throw err;
   }
 }
@@ -85,7 +58,6 @@ async function fetchStealth(url: string): Promise<Response> {
 
 function parsePriceText(text: string): number | null {
   if (!text) return null;
-  // Nettoyer le texte (espaces insécables, devises, etc.)
   const cleanText = text.replace(/\s/g, "").replace(",", ".");
   const match = cleanText.match(/(\d+\.?\d*)/);
   if (!match) return null;
@@ -93,10 +65,6 @@ function parsePriceText(text: string): number | null {
   return !isNaN(price) && price > 0 && price < 50000 ? price : null;
 }
 
-/**
- * Extrait les données d'un produit depuis du HTML de manière générique.
- * Stratégies : JSON-LD > Meta Tags > Common Selectors
- */
 function extractGenericHTML(html: string, $: cheerio.CheerioAPI): { 
   prix: number | null; 
   titre: string | null; 
@@ -108,92 +76,42 @@ function extractGenericHTML(html: string, $: cheerio.CheerioAPI): {
   let image: string | null = null;
   let strategy = "none";
 
-  // 1. JSON-LD (le plus fiable)
+  // 1. JSON-LD
   try {
-    const scripts = $('script[type="application/ld+json"]');
-    scripts.each((_, el) => {
+    $('script[type="application/ld+json"]').each((_, el) => {
       try {
-        const content = $(el).text().trim();
-        if (!content) return;
-        const json = JSON.parse(content);
-        
-        const processObject = (obj: any) => {
+        const json = JSON.parse($(el).text());
+        const findProduct = (obj: any) => {
           if (!obj) return;
-          if (Array.isArray(obj)) {
-            obj.forEach(processObject);
-            return;
-          }
-          if (obj["@graph"] && Array.isArray(obj["@graph"])) {
-            obj["@graph"].forEach(processObject);
-            return;
-          }
-          
+          if (Array.isArray(obj)) { obj.forEach(findProduct); return; }
           if (obj["@type"] === "Product" || obj["@type"]?.includes("Product")) {
             if (!titre) titre = obj.name;
-            if (!image) image = Array.isArray(obj.image) ? obj.image[0] : (typeof obj.image === 'string' ? obj.image : obj.image?.url);
-            
-            const offers = Array.isArray(obj.offers) ? obj.offers : (obj.offers ? [obj.offers] : []);
-            for (const offer of offers) {
-              if (offer.price) {
-                const p = parsePriceText(offer.price.toString());
-                if (p) {
-                  prix = p;
-                  strategy = "json-ld";
-                }
-              }
-            }
+            if (!image) image = Array.isArray(obj.image) ? obj.image[0] : (obj.image?.url || obj.image);
+            if (obj.offers?.price) { prix = parsePriceText(obj.offers.price.toString()); strategy = "json-ld"; }
           }
+          if (obj["@graph"]) findProduct(obj["@graph"]);
         };
-        processObject(json);
-      } catch (e) {}
+        findProduct(json);
+      } catch {}
     });
-  } catch (e) {}
+  } catch {}
 
   if (prix) return { prix, titre, image, strategy };
 
-  // 2. Meta Tags (OpenGraph / Product)
-  const ogPrice = $('meta[property="og:price:amount"]').attr('content') || 
-                  $('meta[property="product:price:amount"]').attr('content') ||
-                  $('meta[name="twitter:data1"]').attr('content') ||
-                  $('meta[property="og:price"]').attr('content');
-  
-  if (ogPrice) {
-    prix = parsePriceText(ogPrice);
-    if (prix) strategy = "meta-tags";
-  }
+  // 2. Meta Tags
+  prix = parsePriceText($('meta[property="product:price:amount"]').attr('content') || $('meta[property="og:price:amount"]').attr('content'));
+  if (prix) strategy = "meta-tags";
 
-  if (!titre) {
-    titre = $('meta[property="og:title"]').attr('content') || 
-            $('meta[name="twitter:title"]').attr('content') || 
-            $('h1').first().text().trim() || 
-            $('title').text().trim();
-  }
-
-  if (!image) {
-  image = $('meta[property="og:image"]').attr('content') || 
-          $('meta[name="twitter:image"]').attr('content') ||
-          $('meta[property="product:image:url"]').attr('content') ||
-          null;
-}
+  if (!titre) titre = $('meta[property="og:title"]').attr('content') || $('h1').first().text().trim();
+  if (!image) image = $('meta[property="og:image"]').attr('content');
 
   if (prix) return { prix, titre, image, strategy };
 
-  // 3. Common Selectors (Fallbacks)
-  const priceSelectors = [
-    '.price', '[class*="price"]:not([class*="strike"])', 
-    '.product-price', '.current-price', '#priceblock_ourprice',
-    '.price-value', '.amount'
-  ];
-  for (const sel of priceSelectors) {
-    const text = $(sel).first().text().trim();
-    if (text) {
-      const p = parsePriceText(text);
-      if (p) {
-        prix = p;
-        strategy = "selectors";
-        break;
-      }
-    }
+  // 3. Selectors
+  const selectors = ['.price', '.product-price', '#priceblock_ourprice', '.current-price'];
+  for (const s of selectors) {
+    const p = parsePriceText($(s).first().text().trim());
+    if (p) { prix = p; strategy = "selectors"; break; }
   }
 
   return { prix, titre, image, strategy };
@@ -204,55 +122,23 @@ function extractGenericHTML(html: string, $: cheerio.CheerioAPI): {
 interface ScraperResult {
   success: boolean;
   result?: SearchResult;
+  results?: SearchResult[];
   error?: string;
   blocked?: boolean;
 }
 
-/**
- * Tente d'extraire des infos depuis une URL spécifique (ex: trouvée par Google)
- */
 export async function scrapeUrl(
   url: string,
   enseigne: string,
   product: ProductInfo
 ): Promise<ScraperResult> {
-  // Mapping enseigne vers source
-  const sourceMap: Record<string, ResultSource> = {
-    "Leroy Merlin": "scraper_leroymerlin",
-    "Brico Dépôt": "scraper_bricodepot",
-    "Bricomarché": "scraper_bricomarche",
-    "L'Entrepôt du Bricolage": "scraper_entrepot_du_bricolage",
-    "Gedimat": "scraper_gedimat",
-    "123elec": "scraper_123elec",
-    "ManoMano": "scraper_manomano",
-    "Bricozor": "scraper_bricozor",
-    "Amazon": "scraper_amazon",
-  };
-
-  const source = sourceMap[enseigne] || "scraper_leroymerlin";
-
   try {
-    const urlInfo = estimateProductPageProbability(url, product);
-    if (urlInfo.type === 'search' || urlInfo.type === 'category') {
-      if (urlInfo.probability < 0.3) {
-        logScraper(enseigne, `SKIP: Probabilité produit trop faible (${Math.round(urlInfo.probability*100)}%) | Raison: ${urlInfo.reason}`);
-        return { success: false, error: "low_product_probability" };
-      }
-    }
-
-    logScraper(enseigne, `Fetch URL: ${url.substring(0, 80)}...`);
     const response = await fetchStealth(url);
     const html = await response.text();
     const $ = cheerio.load(html);
     
-    // Signaux HTML
-    const htmlValidation = detectHtmlProductSignals(html);
     const extraction = extractGenericHTML(html, $);
-    logExtraction(enseigne, extraction.strategy, !!extraction.prix, extraction.prix ? undefined : "price_not_found");
-
-    const score = calculateRelevanceScore(extraction.titre || "", url, product, htmlValidation.score);
-    
-    console.log(`[Scraper][${enseigne}] Result Check | Score: ${score}% | ProbURL: ${Math.round(urlInfo.probability*100)}% | Signals: ${htmlValidation.signals.join(",")}`);
+    const score = calculateRelevanceScore(extraction.titre || "", url, product);
 
     return {
       success: true,
@@ -262,36 +148,50 @@ export async function scrapeUrl(
         prix: extraction.prix,
         prix_status: extraction.prix ? "detected" : "not_found",
         lien: url,
-        source,
+        source: "scraper_" + enseigne.toLowerCase().replace(/\s+/g, "_") as any,
         image_url: extraction.image,
         relevance_score: score,
         retrieved_at: new Date().toISOString(),
       }
     };
   } catch (err: any) {
-    logExtraction(enseigne, "none", false, err.message);
-    return { 
-      success: false, 
-      error: err.message, 
-      blocked: err.message.includes("BLOCKED") 
-    };
+    return { success: false, error: err.message, blocked: err.message.includes("BLOCKED") };
   }
 }
 
-// ─── Scrapers Spécifiques (Wrappers) ──────────────────────────────────────────
+// ─── Discovery Fallback (DuckDuckGo HTML) ───────────────────────────────────
 
-async function scrapeSearchGeneric(
-  name: string,
-  searchPattern: string,
-  source: ResultSource,
-  query: string,
-  product: ProductInfo
-): Promise<ScraperResult> {
-  const url = searchPattern.replace("{{query}}", encodeURIComponent(query));
-  return scrapeUrl(url, name, product);
+export async function discoverViaDuckDuckGo(query: string, product: ProductInfo): Promise<SearchResult[]> {
+  const url = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
+  try {
+    const response = await fetchStealth(url);
+    const html = await response.text();
+    const $ = cheerio.load(html);
+    const results: SearchResult[] = [];
+
+    $('.result__body').slice(0, 5).each((_, el) => {
+      const link = $(el).find('.result__a').attr('href');
+      const title = $(el).find('.result__a').text().trim();
+      if (link && !link.includes('duckduckgo.com')) {
+        results.push({
+          enseigne: "Discovery",
+          titre: title,
+          prix: null,
+          prix_status: "not_found",
+          lien: link,
+          source: "scraper_duckduckgo" as any,
+          relevance_score: calculateRelevanceScore(title, link, product),
+          retrieved_at: new Date().toISOString(),
+        });
+      }
+    });
+    return results;
+  } catch {
+    return [];
+  }
 }
 
-// ─── Définition des scrapers disponibles ─────────────────────────────────────
+// ─── Scrapers List ───────────────────────────────────────────────────────────
 
 export interface FallbackScraper {
   name: string;
@@ -304,127 +204,63 @@ export const FALLBACK_SCRAPERS: FallbackScraper[] = [
   {
     name: "123elec",
     source: "scraper_123elec",
-    fn: (q, p) => scrapeSearchGeneric("123elec", "https://www.123elec.com/catalogsearch/result/?q={{query}}", "scraper_123elec", q, p),
+    fn: (q, p) => scrapeUrl(`https://www.123elec.com/catalogsearch/result/?q=${encodeURIComponent(q)}`, "123elec", p),
     enabled: true,
   },
   {
     name: "ManoMano",
     source: "scraper_manomano",
-    fn: (q, p) => scrapeSearchGeneric("ManoMano", "https://www.manomano.fr/recherche/{{query}}", "scraper_manomano", q, p),
-    enabled: true,
-  },
-  {
-    name: "Bricozor",
-    source: "scraper_bricozor",
-    fn: (q, p) => scrapeSearchGeneric("Bricozor", "https://www.bricozor.com/recherche?q={{query}}", "scraper_bricozor", q, p),
+    fn: (q, p) => scrapeUrl(`https://www.manomano.fr/recherche/${encodeURIComponent(q)}`, "ManoMano", p),
     enabled: true,
   },
   {
     name: "Leroy Merlin",
     source: "scraper_leroymerlin",
-    fn: (q, p) => scrapeSearchGeneric("Leroy Merlin", "https://www.leroymerlin.fr/recherche?q={{query}}", "scraper_leroymerlin", q, p),
+    fn: (q, p) => scrapeUrl(`https://www.leroymerlin.fr/recherche?q=${encodeURIComponent(q)}`, "Leroy Merlin", p),
     enabled: true,
   },
   {
-    name: "Brico Dépôt",
-    source: "scraper_bricodepot",
-    fn: (q, p) => scrapeSearchGeneric("Brico Dépôt", "https://www.bricodepot.fr/recherche/search.jsp?query={{query}}", "scraper_bricodepot", q, p),
-    enabled: true,
-  },
-  {
-    name: "Bricomarché",
-    source: "scraper_bricomarche",
-    fn: (q, p) => scrapeSearchGeneric("Bricomarché", "https://www.bricomarche.com/recherche?text={{query}}", "scraper_bricomarche", q, p),
-    enabled: true,
-  },
-  {
-    name: "L'Entrepôt du Bricolage",
-    source: "scraper_entrepot_du_bricolage",
-    fn: (q, p) => scrapeSearchGeneric("L'Entrepôt du Bricolage", "https://www.entrepot-du-bricolage.fr/recherche?q={{query}}", "scraper_entrepot_du_bricolage", q, p),
-    enabled: true,
-  },
-  {
-    name: "Gedimat",
-    source: "scraper_gedimat",
-    fn: (q, p) => scrapeSearchGeneric("Gedimat", "https://www.gedimat.fr/recherche.php?q={{query}}", "scraper_gedimat", q, p),
-    enabled: true,
-  },
-  {
-    name: "Amazon",
-    source: "scraper_amazon",
-    fn: (q, p) => scrapeSearchGeneric("Amazon", "https://www.amazon.fr/s?k={{query}}", "scraper_amazon", q, p),
+    name: "Bricozor",
+    source: "scraper_bricozor",
+    fn: (q, p) => scrapeUrl(`https://www.bricozor.com/recherche?q=${encodeURIComponent(q)}`, "Bricozor", p),
     enabled: true,
   },
 ];
 
-// ─── Orchestration fallback ───────────────────────────────────────────────────
-
-export interface FallbackResult {
-  results: SearchResult[];
-  stats: {
-    tried: string[];
-    success: string[];
-    blocked: string[];
-    errors: string[];
-  };
-}
+// ─── Orchestration ───────────────────────────────────────────────────────────
 
 export async function runFallbackScrapers(
   query: string,
   product: ProductInfo,
   existingEnseignes: Set<string> = new Set(),
   onResult?: (result: SearchResult, scraperName: string) => void
-): Promise<FallbackResult> {
-  const activeScrapers = FALLBACK_SCRAPERS.filter(s => s.enabled);
+): Promise<{ results: SearchResult[]; stats: any }> {
   const allResults: SearchResult[] = [];
-  const stats = { tried: [] as string[], success: [] as string[], blocked: [] as string[], errors: [] as string[] };
+  const stats = { success: [] as string[], blocked: [] as string[] };
 
-  let consecutiveBlocked = 0;
-
-  for (let i = 0; i < activeScrapers.length; i++) {
-    if (consecutiveBlocked >= MAX_CONSECUTIVE_403) {
-      console.log(`[FallbackScrapers] STOP: ${consecutiveBlocked} blocages consécutifs`);
-      break;
+  // 1. Discovery Fallback
+  console.log("[FallbackScrapers] Tentative de découverte via DuckDuckGo...");
+  const discoveryResults = await discoverViaDuckDuckGo(query, product);
+  for (const r of discoveryResults) {
+    if (r.relevance_score > 30) {
+      allResults.push(r);
+      if (onResult) onResult(r, "DuckDuckGo");
     }
+  }
 
-    const batch = activeScrapers.slice(i, i + MAX_PARALLEL);
-
-    const batchPromises = batch.map(async (scraper) => {
-      stats.tried.push(scraper.name);
-      
-      // Ne pas lancer si l'enseigne est déjà présente avec un prix
-      if (existingEnseignes.has(scraper.name)) {
-        logScraper(scraper.name, "Déjà trouvé, skip");
-        return;
-      }
-
-      logScraper(scraper.name, "START");
-      const scraperResult = await scraper.fn(query, product);
-
-      if (scraperResult.blocked) {
-        consecutiveBlocked++;
-        stats.blocked.push(scraper.name);
-      } else if (scraperResult.success && scraperResult.result) {
-        consecutiveBlocked = 0;
-        const result = scraperResult.result;
-
-        stats.success.push(scraper.name);
-        allResults.push(result);
-        if (onResult) onResult(result, scraper.name);
-        logScraper(scraper.name, `FIN: ${result.prix ? result.prix + "€" : "pas de prix"}`);
-      } else {
-        consecutiveBlocked = Math.max(0, consecutiveBlocked - 1);
-        stats.errors.push(scraper.name);
-        logScraper(scraper.name, `ECHEC: ${scraperResult.error}`);
-      }
-    });
-
-    await Promise.all(batchPromises);
-    i += MAX_PARALLEL - 1;
-
-    if (i < activeScrapers.length - 1 && consecutiveBlocked < MAX_CONSECUTIVE_403) {
-      await randomDelay();
+  // 2. Scrapers Internes
+  for (const scraper of FALLBACK_SCRAPERS) {
+    if (existingEnseignes.has(scraper.name)) continue;
+    console.log(`[FallbackScrapers] START: ${scraper.name}`);
+    const res = await scraper.fn(query, product);
+    if (res.success && res.result) {
+      allResults.push(res.result);
+      if (onResult) onResult(res.result, scraper.name);
+      stats.success.push(scraper.name);
+    } else if (res.blocked) {
+      stats.blocked.push(scraper.name);
     }
+    await randomDelay();
   }
 
   return { results: allResults, stats };

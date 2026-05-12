@@ -116,7 +116,11 @@ export async function runSearch(
       }
       emit({ type: "source_end", source: "google_cse", status: googleResults.length > 0 ? "success" : "not_found" });
     } catch (err: any) {
-      console.error(`[Orchestrator] Google CSE error: ${err.message}`);
+      if (err.message.includes("403") || err.message.includes("PERMISSION_DENIED")) {
+        console.warn(`[Orchestrator] Google CSE BLOCKED (403). Switching to Fallback Discovery...`);
+      } else {
+        console.error(`[Orchestrator] Google CSE error: ${err.message}`);
+      }
       emit({ type: "source_end", source: "google_cse", status: "error" });
     }
   }

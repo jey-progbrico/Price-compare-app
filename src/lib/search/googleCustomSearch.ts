@@ -7,12 +7,12 @@ import {
 } from "./queryBuilder";
 
 /**
- * Google Custom Search Engine — Vigiprix (v6)
+ * Google Custom Search Engine — Vigiprix (v7)
  * 
- * Améliorations v6 :
- * - Récupère plus de résultats (pagination 2 pages)
- * - Validation HTML légère pour les liens prometteurs
- * - Scoring probabiliste priorisant les fiches produits
+ * Améliorations v7 :
+ * - Gestion gracieuse du 403 (switch vers fallback)
+ * - Plus tolérant sur les résultats
+ * - Extraction prix renforcée
  */
 
 const GOOGLE_CSE_KEY = process.env.GOOGLE_CSE_KEY || "";
@@ -45,14 +45,15 @@ interface GoogleCSEResponse {
 async function quickValidateHTML(url: string): Promise<{ score: number, signals: string[] }> {
   try {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 3000); // 3s max
+    const timeout = setTimeout(() => controller.abort(), 4000); // 4s
     const response = await fetch(url, { 
       signal: controller.signal,
       headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36" }
     });
+    if (!response.ok) return { score: 0.1, signals: ["http_ok"] };
     const text = await response.text();
     clearTimeout(timeout);
-    return detectHtmlProductSignals(text.substring(0, 10000)); // Analyser les 10 premiers ko
+    return detectHtmlProductSignals(text.substring(0, 15000));
   } catch {
     return { score: 0, signals: [] };
   }
@@ -76,81 +77,64 @@ function extractPrice(item: GoogleCSEItem): { prix: number | null; status: PrixS
       }
     }
   }
+  // Regex fallback sur snippet
+  const match = item.snippet?.match(/(\d+[,.]\d{2})\s*€/);
+  if (match) {
+    const price = parseFloat(match[1].replace(",", "."));
+    if (price > 0) return { prix: price, status: "detected" };
+  }
+
   return { prix: null, status: "not_found" };
 }
 
 export async function searchGoogleCSE(
   query: string,
-  product: ProductInfo,
-  numResults = 10
+  product: ProductInfo
 ): Promise<SearchResult[]> {
   if (!GOOGLE_CSE_KEY || !GOOGLE_CSE_ID) return [];
 
-  const results: SearchResult[] = [];
-  
-  // On peut faire jusqu'à 2 requêtes pour avoir 20 résultats bruts
-  const pages = numResults > 10 ? [0, 10] : [0];
+  const url = new URL("https://www.googleapis.com/customsearch/v1");
+  url.searchParams.set("key", GOOGLE_CSE_KEY);
+  url.searchParams.set("cx", GOOGLE_CSE_ID);
+  url.searchParams.set("q", query.trim());
+  url.searchParams.set("num", "10");
+  url.searchParams.set("gl", "fr");
 
-  for (const start of pages) {
-    const url = new URL("https://www.googleapis.com/customsearch/v1");
-    url.searchParams.set("key", GOOGLE_CSE_KEY);
-    url.searchParams.set("cx", GOOGLE_CSE_ID);
-    url.searchParams.set("q", query.trim());
-    url.searchParams.set("num", "10");
-    url.searchParams.set("start", String(start + 1));
-    url.searchParams.set("gl", "fr");
-
-    try {
-      const response = await fetch(url.toString());
-      if (!response.ok) break;
-      const data: GoogleCSEResponse = await response.json();
-      if (!data.items) break;
-
-      for (const item of data.items) {
-        const urlProb = estimateProductPageProbability(item.link, product);
-        
-        // Validation HTML légère pour les liens très probables
-        let htmlScore = 0;
-        let htmlSignals: string[] = [];
-        if (urlProb.probability > 0.6) {
-          const validation = await quickValidateHTML(item.link);
-          htmlScore = validation.score;
-          htmlSignals = validation.signals;
-        }
-
-        const score = calculateRelevanceScore(item.title, item.link, product, htmlScore);
-        
-        console.log(`[GoogleCSE] ${extractEnseigne(item.displayLink)} | ProbURL: ${Math.round(urlProb.probability*100)}% | Type: ${urlProb.type} | Score: ${score}% | Signals: ${htmlSignals.join(",")}`);
-
-        // Rejet si c'est quasi-certainement une page search/listing
-        if (urlProb.type === 'search' || urlProb.type === 'category') {
-           if (score < 40) {
-             console.log(`[GoogleCSE] Reject (Type: ${urlProb.type}): ${item.link.substring(0, 50)}...`);
-             continue;
-           }
-        }
-
-        if (score < 15) continue;
-
-        const { prix, status: prix_status } = extractPrice(item);
-        results.push({
-          enseigne: extractEnseigne(item.displayLink),
-          titre: item.title,
-          prix,
-          prix_status,
-          lien: item.link,
-          source: "google_cse",
-          image_url: item.pagemap?.cse_image?.[0]?.src || null,
-          relevance_score: score,
-          retrieved_at: new Date().toISOString(),
-        });
-      }
-    } catch (err) {
-      console.error("[GoogleCSE] Page error:", err);
+  try {
+    const response = await fetch(url.toString());
+    if (response.status === 403) {
+      console.warn("[GoogleCSE] 403 Forbidden. Discovery will use fallbacks.");
+      return [];
     }
-  }
+    if (!response.ok) return [];
+    const data: GoogleCSEResponse = await response.json();
+    if (!data.items) return [];
 
-  return results;
+    const results: SearchResult[] = [];
+    for (const item of data.items) {
+      const urlProb = estimateProductPageProbability(item.link, product);
+      const score = calculateRelevanceScore(item.title, item.link, product);
+      
+      // Très tolérant : on garde presque tout si le score est correct
+      if (score < 10) continue;
+
+      const { prix, status: prix_status } = extractPrice(item);
+      results.push({
+        enseigne: extractEnseigne(item.displayLink),
+        titre: item.title,
+        prix,
+        prix_status,
+        lien: item.link,
+        source: "google_cse",
+        image_url: item.pagemap?.cse_image?.[0]?.src || null,
+        relevance_score: score,
+        retrieved_at: new Date().toISOString(),
+      });
+    }
+    return results;
+  } catch (err) {
+    return [];
+  }
 }
 
 function extractEnseigne(displayLink: string): string {
@@ -168,24 +152,20 @@ export async function searchGoogleCSECascade(
   const seenEnseignes = new Set<string>();
 
   for (let i = 0; i < queries.length; i++) {
-    const { query, description } = queries[i];
-    console.log(`[GoogleCSE] Cascade Q${i + 1}/${queries.length}: ${description}`);
-
-    // On demande 20 résultats pour la première requête (la plus précise)
-    const results = await searchGoogleCSE(query, product, i === 0 ? 20 : 10);
+    const results = await searchGoogleCSE(queries[i].query, product);
+    if (results.length === 0 && i === 0) {
+      // Si la première requête (précise) ne donne rien ou 403, on continue quand même
+    }
 
     for (const r of results) {
       if (!seenEnseignes.has(r.enseigne)) {
         seenEnseignes.add(r.enseigne);
         allResults.push(r);
-      } else if (r.prix !== null) {
-        const idx = allResults.findIndex(ex => ex.enseigne === r.enseigne && ex.prix === null);
-        if (idx !== -1) allResults[idx] = r;
       }
     }
 
     if (onProgress) onProgress([...allResults], i);
-    if (i < queries.length - 1) await new Promise(r => setTimeout(r, 400));
+    if (i < queries.length - 1) await new Promise(r => setTimeout(r, 200));
   }
 
   return allResults;
