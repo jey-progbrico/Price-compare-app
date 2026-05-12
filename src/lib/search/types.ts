@@ -95,6 +95,7 @@ export type SearchEventType =
   | "source_result"     // Un résultat live arrive
   | "source_end"        // Une source termine
   | "done"              // Recherche complète terminée
+  | "debug"             // Logs de debug backend vers frontend
   | "error";            // Erreur fatale
 
 export interface SearchEvent {
@@ -105,6 +106,7 @@ export interface SearchEvent {
   results?: SearchResult[];
   stats?: SearchStats;
   message?: string;
+  category?: string;    // Catégorie pour les événements debug
 }
 
 // ─── Statistiques de recherche ───────────────────────────────────────────────

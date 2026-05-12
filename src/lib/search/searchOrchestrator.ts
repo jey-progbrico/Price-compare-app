@@ -152,10 +152,18 @@ export async function runSearch(
   try {
     const fallbackStart = Date.now();
     const { results: fallbackResults, stats: fallbackStats } =
-      await runFallbackScrapers(bestQuery, product, existingEnseignes, (result) => {
-        console.log(`[PIPELINE] Result discovered: ${result.enseigne} | ${result.prix}€ | Source: ${result.source}`);
-        emit({ type: "source_result", source: result.source, result });
-      });
+      await runFallbackScrapers(
+        bestQuery, 
+        product, 
+        existingEnseignes, 
+        (result) => {
+          console.log(`[PIPELINE] Result discovered: ${result.enseigne} | ${result.prix}€ | Source: ${result.source}`);
+          emit({ type: "source_result", source: result.source, result });
+        },
+        (category, message) => {
+          emit({ type: "debug", category, message });
+        }
+      );
 
     console.log(`[PIPELINE] Step 3 complete in ${Date.now() - fallbackStart}ms. Discovered ${fallbackResults.length} new items.`);
 
@@ -222,6 +230,8 @@ export async function processScrapingQueue(
         onProgress("scraper_result", { scraper: event.result.enseigne, status: "success", result: event.result });
       } else if (event.type === "source_end" && event.status !== "success") {
         onProgress("scraper_result", { scraper: event.source, status: event.status });
+      } else if (event.type === "debug") {
+        onProgress("debug", { category: event.category, message: event.message });
       }
     },
   });

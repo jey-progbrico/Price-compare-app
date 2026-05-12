@@ -203,26 +203,24 @@ export async function scrapeUrl(
 export async function discoverViaMerchantSearch(
   name: string,
   searchPattern: string,
-  product: ProductInfo
+  product: ProductInfo,
+  onDebug?: (category: string, message: string) => void
 ): Promise<SearchResult[]> {
   const start = Date.now();
   const query = product.ean || product.designation || "";
   const url = searchPattern.replace("{{query}}", encodeURIComponent(query));
   
-  console.log(`[MERCHANT SEARCH START] ${name} | URL: ${url}`);
+  if (onDebug) onDebug("merchant_search", `Starting ${name} search: ${url}`);
 
   try {
     const response = await fetchStealth(url);
     const html = await response.text();
     const $ = cheerio.load(html);
     
-    console.log(`[MERCHANT SEARCH DEBUG] ${name} | Status: ${response.status} | Length: ${html.length}`);
-    console.log(`[MERCHANT SEARCH HTML] ${name} | Snippet: ${html.substring(0, 500).replace(/\s+/g, " ")}`);
-
-    // Détection de pages JS-only
-    const isJSOnly = html.includes("id=\"__NEXT_DATA__\"") || html.includes("window.__INITIAL_STATE__") || html.includes("root-react");
-    if (isJSOnly) {
-      console.log(`[MERCHANT SEARCH DEBUG] ${name} | JS-only page detected (Next.js/React state present)`);
+    if (onDebug) {
+      onDebug("merchant_html", `${name} | Status: ${response.status} | Length: ${html.length}`);
+      if (html.includes("id=\"__NEXT_DATA__\"")) onDebug("merchant_html", `${name} | JS-only detected (__NEXT_DATA__)`);
+      if (html.includes("application/ld+json")) onDebug("merchant_html", `${name} | JSON-LD found`);
     }
 
     // Direct hit?
@@ -249,7 +247,7 @@ export async function discoverViaMerchantSearch(
 
     selectors.forEach(sel => {
       const matches = $(sel).length;
-      if (matches > 0) console.log(`[MERCHANT SEARCH DEBUG] ${name} | Selector "${sel}" matched ${matches} times`);
+      if (matches > 0 && onDebug) onDebug("selector", `${name} | Selector "${sel}" matched ${matches}`);
     });
 
     let anchorCount = 0;
@@ -375,33 +373,33 @@ export async function runFallbackScrapers(
   query: string,
   product: ProductInfo,
   existingEnseignes: Set<string> = new Set(),
-  onResult?: (result: SearchResult, scraperName: string) => void
+  onResult?: (result: SearchResult, scraperName: string) => void,
+  onDebug?: (category: string, message: string) => void
 ): Promise<{ results: SearchResult[]; stats: { success: string[]; blocked: string[] } }> {
   const startAll = Date.now();
   const candidates: SearchResult[] = [];
   const stats = { success: [] as string[], blocked: [] as string[] };
 
-  console.log(`[FALLBACK START] Starting complete fallback pipeline...`);
+  if (onDebug) onDebug("pipeline", "Starting fallback pipeline");
 
   // 1. DuckDuckGo Discovery
   const ddgResults = await discoverViaDuckDuckGo(query, product);
   candidates.push(...ddgResults);
+  if (onDebug) onDebug("pipeline", `DuckDuckGo found ${ddgResults.length} links`);
 
   // 2. Merchants Search Discovery
   for (const merchant of MERCHANTS) {
     if (existingEnseignes.has(merchant.name)) continue;
-    const mResults = await discoverViaMerchantSearch(merchant.name, merchant.searchPattern, product);
+    const mResults = await discoverViaMerchantSearch(merchant.name, merchant.searchPattern, product, onDebug);
     candidates.push(...mResults);
     await randomDelay();
   }
 
-  console.log(`[FALLBACK] Total candidates discovered: ${candidates.length}`);
+  if (onDebug) onDebug("pipeline", `Total candidates discovered: ${candidates.length}`);
 
   // 3. Filtrage et Scraping sélectif
-  // On trie par score de pertinence décroissant
   const sortedCandidates = candidates.sort((a, b) => (b.relevance_score ?? 0) - (a.relevance_score ?? 0));
   
-  // On ne garde que les meilleurs par enseigne
   const bestPerEnseigne = new Map<string, SearchResult>();
   for (const c of sortedCandidates) {
     if (!bestPerEnseigne.has(c.enseigne)) {
@@ -412,14 +410,14 @@ export async function runFallbackScrapers(
   const resultsToProcess = Array.from(bestPerEnseigne.values())
     .filter(c => {
       const isGood = (c.relevance_score ?? 0) >= 20;
-      if (!isGood) {
-        console.log(`[FALLBACK REJECT] ${c.enseigne} | Discovery score too low: ${c.relevance_score}% | URL: ${c.lien.substring(0, 60)}...`);
+      if (!isGood && onDebug) {
+        onDebug("candidate_reject", `${c.enseigne} | Score too low: ${c.relevance_score}% | ${c.lien.substring(0, 40)}`);
       }
       return isGood;
     })
     .slice(0, 5);
 
-  console.log(`[FALLBACK] Processing ${resultsToProcess.length} candidates meeting 20% threshold...`);
+  if (onDebug) onDebug("pipeline", `Processing ${resultsToProcess.length} best candidates`);
 
   const finalResults: SearchResult[] = [];
   await Promise.all(resultsToProcess.map(async (r) => {
@@ -427,23 +425,22 @@ export async function runFallbackScrapers(
     if (res.success && res.result) {
       const finalScore = res.result.relevance_score ?? 0;
       
-      // SEUIL DE QUALITÉ ÉQUILIBRÉ : 35% minimum pour être affiché
       if (finalScore >= 35) {
-        console.log(`[FALLBACK ACCEPT] ${r.enseigne} | Final Score: ${finalScore}% | Price: ${res.result.prix}€ | Title: ${res.result.titre?.substring(0, 40)}...`);
+        if (onDebug) onDebug("candidate_accept", `${r.enseigne} | Validated: ${finalScore}% | ${res.result.prix}€`);
         finalResults.push(res.result);
         if (onResult) onResult(res.result, r.enseigne);
         stats.success.push(r.enseigne);
       } else {
-        console.log(`[FALLBACK REJECT] ${r.enseigne} | Match score too low after extraction: ${finalScore}% (Threshold 35%) | Title: ${res.result.titre?.substring(0, 40)}... | URL: ${r.lien.substring(0, 60)}`);
+        if (onDebug) onDebug("candidate_reject", `${r.enseigne} | Match score too low: ${finalScore}%`);
       }
     } else if (res.blocked) {
-      console.log(`[FALLBACK BLOCKED] ${r.enseigne} | IP might be blocked by merchant | URL: ${r.lien.substring(0, 60)}`);
+      if (onDebug) onDebug("error", `${r.enseigne} | BLOCKED`);
       stats.blocked.push(r.enseigne);
     } else {
-      console.log(`[FALLBACK REJECT] ${r.enseigne} | Extraction failed (no price/title found or timeout) | URL: ${r.lien.substring(0, 60)}`);
+      if (onDebug) onDebug("error", `${r.enseigne} | Extraction failed`);
     }
   }));
 
-  console.log(`[FALLBACK END] Duration: ${Date.now() - startAll}ms | Final Valid Results: ${finalResults.length}`);
+  if (onDebug) onDebug("pipeline", `Fallback finished. Results: ${finalResults.length}`);
   return { results: finalResults, stats };
 }

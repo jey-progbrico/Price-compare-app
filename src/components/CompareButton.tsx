@@ -435,6 +435,11 @@ export default function CompareButton({
         eventSource.close();
       });
 
+      eventSource.addEventListener("debug", (e: MessageEvent) => {
+        const event = JSON.parse(e.data);
+        console.log(`[BACKEND-DEBUG][${event.category}] ${event.message}`);
+      });
+
       eventSource.addEventListener("error", (e: MessageEvent) => {
         console.error("[FRONTEND] STREAM ERROR:", e);
         let msg = "Erreur de connexion.";
