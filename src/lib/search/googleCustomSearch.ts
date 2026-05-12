@@ -101,14 +101,26 @@ export async function searchGoogleCSE(
   url.searchParams.set("gl", "fr");
 
   try {
-    const response = await fetch(url.toString());
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 6000); // 6s max
+    
+    console.log(`[GoogleCSE] Searching: ${query.substring(0, 50)}...`);
+    const response = await fetch(url.toString(), { signal: controller.signal });
+    clearTimeout(timeout);
+
     if (response.status === 403) {
-      console.warn("[GoogleCSE] 403 Forbidden. Discovery will use fallbacks.");
+      console.log("[GoogleCSE] 403 Forbidden. Discovery will use fallbacks.");
       return [];
     }
-    if (!response.ok) return [];
+    if (!response.ok) {
+      console.log(`[GoogleCSE] HTTP Error: ${response.status}`);
+      return [];
+    }
     const data: GoogleCSEResponse = await response.json();
-    if (!data.items) return [];
+    if (!data.items) {
+      console.log("[GoogleCSE] No items found in response.");
+      return [];
+    }
 
     const results: SearchResult[] = [];
     for (const item of data.items) {

@@ -83,11 +83,15 @@ export async function runSearch(
   let googleResults: SearchResult[] = [];
   if (isGoogleCSEConfigured()) {
     try {
+      console.log(`[PIPELINE] Starting Step 2: Google CSE Cascade`);
+      let resultsDiscovered = 0;
       googleResults = await searchGoogleCSECascade(
         product,
         (partialResults) => {
-          const newResults = partialResults.slice(googleResults.length);
+          const newResults = partialResults.slice(resultsDiscovered);
+          resultsDiscovered = partialResults.length;
           for (const r of newResults) {
+            console.log(`[PIPELINE] Google CSE found: ${r.enseigne} | ${r.prix}€`);
             emit({ type: "source_result", source: "google_cse", result: r });
           }
         }
@@ -96,8 +100,7 @@ export async function runSearch(
       // --- ENHANCEMENT: Scrape missing prices for Google results ---
       const missingPrice = googleResults.filter(r => r.prix === null);
       if (missingPrice.length > 0) {
-        console.log(`[Orchestrator] Attempting to scrape ${missingPrice.length} Google links without price`);
-        // Limit to 2 parallel scrapes to preserve performance
+        console.log(`[PIPELINE] Scraping ${missingPrice.length} Google links without price...`);
         const toScrape = missingPrice.slice(0, 2);
         await Promise.all(toScrape.map(async (r) => {
           const res = await scrapeUrl(r.lien, r.enseigne, product);
@@ -105,6 +108,7 @@ export async function runSearch(
             r.prix = res.result.prix;
             r.prix_status = "detected";
             r.image_url = res.result.image_url || r.image_url;
+            console.log(`[PIPELINE] Price recovered for ${r.enseigne}: ${r.prix}€`);
             emit({ type: "source_result", source: "google_cse", result: r });
           }
         }));
@@ -114,13 +118,10 @@ export async function runSearch(
         stats.from_google = googleResults.length;
         stats.sources_success.push("google_cse");
       }
+      console.log(`[PIPELINE] Step 2 finished. Found ${googleResults.length} results from Google.`);
       emit({ type: "source_end", source: "google_cse", status: googleResults.length > 0 ? "success" : "not_found" });
     } catch (err: any) {
-      if (err.message.includes("403") || err.message.includes("PERMISSION_DENIED")) {
-        console.warn(`[Orchestrator] Google CSE BLOCKED (403). Switching to Fallback Discovery...`);
-      } else {
-        console.error(`[Orchestrator] Google CSE error: ${err.message}`);
-      }
+      console.log(`[PIPELINE] Google CSE Failed/Blocked: ${err.message}`);
       emit({ type: "source_end", source: "google_cse", status: "error" });
     }
   }
@@ -136,10 +137,11 @@ export async function runSearch(
     queries.find(q => q.type === "ref_fabricant")?.query ||
     queries.find(q => q.type === "mixed")?.query ||
     queries.find(q => q.type === "designation")?.query ||
-    product.ean
+    product.ean ||
+    ""
   );
 
-  console.log(`[PIPELINE] Best fallback query identified: "${bestQuery}"`);
+  console.log(`[PIPELINE] FALLBACK START | Query: "${bestQuery}"`);
 
   const scraperSources = FALLBACK_SCRAPERS.map(s => s.source);
   for (const src of scraperSources) {

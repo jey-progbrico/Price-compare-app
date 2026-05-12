@@ -65,13 +65,25 @@ export async function GET(request: Request) {
         }
 
         // 2. Lancer la recherche via l'orchestrateur
+        console.log(`[STREAM] Starting runSearch for EAN: ${ean}`);
+        console.log("[STREAM RESPONSE START]");
+        
         await runSearch(
           product,
           { force_refresh: forceRefresh },
-          { onEvent: emit }
+          { 
+            onEvent: (event) => {
+              if (event.type === "source_result") {
+                console.log(`[STREAM] Emitting result: ${event.result?.enseigne} | ${event.result?.prix}€`);
+              }
+              emit(event);
+            }
+          }
         );
+
+        console.log("[STREAM RESPONSE END]");
       } catch (error: any) {
-        console.error("[Stream] Erreur fatale:", error.message);
+        console.log(`[STREAM] Fatal error: ${error.message}`);
         emit({ type: "error", message: error.message || "Erreur inconnue" });
       } finally {
         try {
