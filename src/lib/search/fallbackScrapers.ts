@@ -1,14 +1,14 @@
 import * as cheerio from "cheerio";
 import type { SearchResult, ProductInfo, ResultSource, PrixStatus } from "./types";
-import { calculateRelevanceScore, estimateProductPageProbability, detectHtmlProductSignals } from "./queryBuilder";
+import { calculateRelevanceScore } from "./queryBuilder";
 
 /**
- * Fallback Scrapers — Vigiprix (v5)
+ * Fallback Scrapers — Vigiprix (v5 - TS Fixed)
  * 
  * Améliorations v5 :
  * - Découverte alternative via DuckDuckGo HTML
  * - Extraction ultra-tolérante (JSON-LD, Meta, Sélecteurs)
- * - Gestion robuste des blocages
+ * - Correction des types TypeScript (null/undefined)
  */
 
 // ─── Configuration ─────────────────────────────────────────────────────────────
@@ -25,7 +25,7 @@ const USER_AGENTS = [
 ];
 
 function randomUA(): string {
-  return USER_AGENTS[Math.floor(Math.random() * USER_AGENTS.length)];
+  return USER_AGENTS[Math.floor(Math.random() * USER_AGENTS.length)] || USER_AGENTS[0];
 }
 
 function randomDelay(): Promise<void> {
@@ -56,7 +56,7 @@ async function fetchStealth(url: string): Promise<Response> {
 
 // ─── Extraction Générique ──────────────────────────────────────────────────────
 
-function parsePriceText(text: string): number | null {
+function parsePriceText(text: string | null | undefined): number | null {
   if (!text) return null;
   const cleanText = text.replace(/\s/g, "").replace(",", ".");
   const match = cleanText.match(/(\d+\.?\d*)/);
@@ -80,14 +80,23 @@ function extractGenericHTML(html: string, $: cheerio.CheerioAPI): {
   try {
     $('script[type="application/ld+json"]').each((_, el) => {
       try {
-        const json = JSON.parse($(el).text());
+        const text = $(el).text();
+        if (!text) return;
+        const json = JSON.parse(text);
+        
         const findProduct = (obj: any) => {
           if (!obj) return;
           if (Array.isArray(obj)) { obj.forEach(findProduct); return; }
           if (obj["@type"] === "Product" || obj["@type"]?.includes("Product")) {
-            if (!titre) titre = obj.name;
-            if (!image) image = Array.isArray(obj.image) ? obj.image[0] : (obj.image?.url || obj.image);
-            if (obj.offers?.price) { prix = parsePriceText(obj.offers.price.toString()); strategy = "json-ld"; }
+            if (!titre && obj.name) titre = String(obj.name);
+            if (!image) {
+              const img = Array.isArray(obj.image) ? obj.image[0] : (obj.image?.url || obj.image);
+              if (img) image = String(img);
+            }
+            if (obj.offers?.price) { 
+              prix = parsePriceText(String(obj.offers.price)); 
+              strategy = "json-ld"; 
+            }
           }
           if (obj["@graph"]) findProduct(obj["@graph"]);
         };
@@ -102,15 +111,16 @@ function extractGenericHTML(html: string, $: cheerio.CheerioAPI): {
   prix = parsePriceText($('meta[property="product:price:amount"]').attr('content') || $('meta[property="og:price:amount"]').attr('content'));
   if (prix) strategy = "meta-tags";
 
-  if (!titre) titre = $('meta[property="og:title"]').attr('content') || $('h1').first().text().trim();
-  if (!image) image = $('meta[property="og:image"]').attr('content');
+  if (!titre) titre = $('meta[property="og:title"]').attr('content') || $('h1').first().text().trim() || null;
+  if (!image) image = $('meta[property="og:image"]').attr('content') || null;
 
   if (prix) return { prix, titre, image, strategy };
 
   // 3. Selectors
   const selectors = ['.price', '.product-price', '#priceblock_ourprice', '.current-price'];
   for (const s of selectors) {
-    const p = parsePriceText($(s).first().text().trim());
+    const text = $(s).first().text().trim();
+    const p = parsePriceText(text);
     if (p) { prix = p; strategy = "selectors"; break; }
   }
 
@@ -140,15 +150,17 @@ export async function scrapeUrl(
     const extraction = extractGenericHTML(html, $);
     const score = calculateRelevanceScore(extraction.titre || "", url, product);
 
+    const sourceName = ("scraper_" + enseigne.toLowerCase().replace(/\s+/g, "_")) as ResultSource;
+
     return {
       success: true,
       result: {
         enseigne,
         titre: extraction.titre || `Produit ${enseigne}`,
         prix: extraction.prix,
-        prix_status: extraction.prix ? "detected" : "not_found",
+        prix_status: (extraction.prix ? "detected" : "not_found") as PrixStatus,
         lien: url,
-        source: "scraper_" + enseigne.toLowerCase().replace(/\s+/g, "_") as any,
+        source: sourceName,
         image_url: extraction.image,
         relevance_score: score,
         retrieved_at: new Date().toISOString(),
@@ -179,7 +191,7 @@ export async function discoverViaDuckDuckGo(query: string, product: ProductInfo)
           prix: null,
           prix_status: "not_found",
           lien: link,
-          source: "scraper_duckduckgo" as any,
+          source: "scraper_duckduckgo" as ResultSource,
           relevance_score: calculateRelevanceScore(title, link, product),
           retrieved_at: new Date().toISOString(),
         });
@@ -234,7 +246,7 @@ export async function runFallbackScrapers(
   product: ProductInfo,
   existingEnseignes: Set<string> = new Set(),
   onResult?: (result: SearchResult, scraperName: string) => void
-): Promise<{ results: SearchResult[]; stats: any }> {
+): Promise<{ results: SearchResult[]; stats: { success: string[]; blocked: string[] } }> {
   const allResults: SearchResult[] = [];
   const stats = { success: [] as string[], blocked: [] as string[] };
 
@@ -242,7 +254,7 @@ export async function runFallbackScrapers(
   console.log("[FallbackScrapers] Tentative de découverte via DuckDuckGo...");
   const discoveryResults = await discoverViaDuckDuckGo(query, product);
   for (const r of discoveryResults) {
-    if (r.relevance_score > 30) {
+    if (r.relevance_score && r.relevance_score > 30) {
       allResults.push(r);
       if (onResult) onResult(r, "DuckDuckGo");
     }
