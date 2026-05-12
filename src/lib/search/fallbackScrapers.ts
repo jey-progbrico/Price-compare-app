@@ -3,21 +3,12 @@ import type { SearchResult, ProductInfo, ResultSource, PrixStatus } from "./type
 import { calculateRelevanceScore } from "./queryBuilder";
 
 /**
- * Fallback Scrapers — Vigiprix (v2)
- *
- * Changements v2 :
- * - Conserve les résultats MÊME sans prix détecté (prix_status: "not_found")
- * - Les scrapers s'exécutent TOUJOURS (plus de seuil FALLBACK_THRESHOLD)
- * - Résultat minimum garanti : lien produit + nom enseigne
- *
- * Sites inclus :
- *   - 123elec.com   (électricité, faible anti-bot)
- *   - ManoMano.fr   (général bricolage, modéré)
- *   - Bricozor.com  (bricolage spécialisé, léger)
- *   - Amazon.fr     (conditionnel, souvent bloqué)
- *
- * Sites EXCLUS (anti-bot agressif) :
- *   - Leroy Merlin, Castorama, Brico Dépôt, Bricomarché, Bricoman, Entrepôt
+ * Fallback Scrapers — Vigiprix (v3)
+ * 
+ * Améliorations v3 :
+ * - Extraction générique (JSON-LD, Meta tags, Sélecteurs communs)
+ * - Support étendu : Leroy Merlin, Brico Dépôt, Bricomarché, Entrepôt, Gedimat
+ * - Logging amélioré (stratégie, succès/échec)
  */
 
 // ─── Configuration ─────────────────────────────────────────────────────────────
@@ -26,10 +17,8 @@ const MAX_PARALLEL = parseInt(process.env.MAX_PARALLEL_SCRAPERS || "2");
 const MIN_DELAY_MS = parseInt(process.env.MIN_DELAY_MS || "800");
 const MAX_DELAY_MS = parseInt(process.env.MAX_DELAY_MS || "2500");
 const MAX_CONSECUTIVE_403 = parseInt(process.env.MAX_CONSECUTIVE_403 || "2");
-const SCRAPER_TIMEOUT_MS = 12000; // 12s max par scraper
+const SCRAPER_TIMEOUT_MS = 15000; // 15s max par scraper
 const MIN_RELEVANCE_SCORE = parseInt(process.env.MIN_RELEVANCE_SCORE || "20");
-
-// ─── User-Agents rotatifs ─────────────────────────────────────────────────────
 
 const USER_AGENTS = [
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
@@ -47,6 +36,17 @@ function randomDelay(): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+// ─── Logging Helpers ──────────────────────────────────────────────────────────
+
+function logScraper(enseigne: string, message: string) {
+  console.log(`[Scraper][${enseigne}] ${message}`);
+}
+
+function logExtraction(enseigne: string, strategy: string, success: boolean, error?: string) {
+  const status = success ? "SUCCESS" : "FAILURE";
+  console.log(`[Extraction][${enseigne}] ${status} | Strategy: ${strategy}${error ? ` | Error: ${error}` : ""}`);
+}
+
 // ─── Fetch stealth ────────────────────────────────────────────────────────────
 
 async function fetchStealth(url: string): Promise<Response> {
@@ -58,7 +58,7 @@ async function fetchStealth(url: string): Promise<Response> {
       signal: controller.signal,
       headers: {
         "User-Agent": randomUA(),
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
         "Accept-Language": "fr-FR,fr;q=0.9,en;q=0.7",
         "Accept-Encoding": "gzip, deflate, br",
         "Cache-Control": "no-cache",
@@ -82,7 +82,124 @@ async function fetchStealth(url: string): Promise<Response> {
   }
 }
 
-// ─── Type résultat interne ────────────────────────────────────────────────────
+// ─── Extraction Générique ──────────────────────────────────────────────────────
+
+function parsePriceText(text: string): number | null {
+  if (!text) return null;
+  // Nettoyer le texte (espaces insécables, devises, etc.)
+  const cleanText = text.replace(/\s/g, "").replace(",", ".");
+  const match = cleanText.match(/(\d+\.?\d*)/);
+  if (!match) return null;
+  const price = parseFloat(match[1]);
+  return !isNaN(price) && price > 0 && price < 50000 ? price : null;
+}
+
+/**
+ * Extrait les données d'un produit depuis du HTML de manière générique.
+ * Stratégies : JSON-LD > Meta Tags > Common Selectors
+ */
+function extractGenericHTML(html: string, $: cheerio.CheerioAPI): { 
+  prix: number | null; 
+  titre: string | null; 
+  image: string | null;
+  strategy: string;
+} {
+  let prix: number | null = null;
+  let titre: string | null = null;
+  let image: string | null = null;
+  let strategy = "none";
+
+  // 1. JSON-LD (le plus fiable)
+  try {
+    const scripts = $('script[type="application/ld+json"]');
+    scripts.each((_, el) => {
+      try {
+        const content = $(el).text().trim();
+        if (!content) return;
+        const json = JSON.parse(content);
+        
+        const processObject = (obj: any) => {
+          if (!obj) return;
+          if (Array.isArray(obj)) {
+            obj.forEach(processObject);
+            return;
+          }
+          if (obj["@graph"] && Array.isArray(obj["@graph"])) {
+            obj["@graph"].forEach(processObject);
+            return;
+          }
+          
+          if (obj["@type"] === "Product" || obj["@type"]?.includes("Product")) {
+            if (!titre) titre = obj.name;
+            if (!image) image = Array.isArray(obj.image) ? obj.image[0] : (typeof obj.image === 'string' ? obj.image : obj.image?.url);
+            
+            const offers = Array.isArray(obj.offers) ? obj.offers : (obj.offers ? [obj.offers] : []);
+            for (const offer of offers) {
+              if (offer.price) {
+                const p = parsePriceText(offer.price.toString());
+                if (p) {
+                  prix = p;
+                  strategy = "json-ld";
+                }
+              }
+            }
+          }
+        };
+        processObject(json);
+      } catch (e) {}
+    });
+  } catch (e) {}
+
+  if (prix) return { prix, titre, image, strategy };
+
+  // 2. Meta Tags (OpenGraph / Product)
+  const ogPrice = $('meta[property="og:price:amount"]').attr('content') || 
+                  $('meta[property="product:price:amount"]').attr('content') ||
+                  $('meta[name="twitter:data1"]').attr('content') ||
+                  $('meta[property="og:price"]').attr('content');
+  
+  if (ogPrice) {
+    prix = parsePriceText(ogPrice);
+    if (prix) strategy = "meta-tags";
+  }
+
+  if (!titre) {
+    titre = $('meta[property="og:title"]').attr('content') || 
+            $('meta[name="twitter:title"]').attr('content') || 
+            $('h1').first().text().trim() || 
+            $('title').text().trim();
+  }
+
+  if (!image) {
+    image = $('meta[property="og:image"]').attr('content') || 
+            $('meta[name="twitter:image"]').attr('content') ||
+            $('meta[property="product:image:url"]').attr('content');
+  }
+
+  if (prix) return { prix, titre, image, strategy };
+
+  // 3. Common Selectors (Fallbacks)
+  const priceSelectors = [
+    '.price', '[class*="price"]:not([class*="strike"])', 
+    '.product-price', '.current-price', '#priceblock_ourprice',
+    '.price-value', '.amount'
+  ];
+  for (const sel of priceSelectors) {
+    const text = $(sel).first().text().trim();
+    if (text) {
+      const p = parsePriceText(text);
+      if (p) {
+        prix = p;
+        strategy = "selectors";
+        break;
+      }
+    }
+  }
+
+  return { prix, titre, image, strategy };
+}
+
+// ─── Scraper Interface ────────────────────────────────────────────────────────
 
 interface ScraperResult {
   success: boolean;
@@ -92,276 +209,138 @@ interface ScraperResult {
 }
 
 /**
- * Tente d'extraire un prix depuis un texte HTML.
- * Retourne null si non trouvé.
+ * Tente d'extraire des infos depuis une URL spécifique (ex: trouvée par Google)
  */
-function parsePriceText(text: string): number | null {
-  const match = text.match(/(\d+[,.]?\d*)/);
-  if (!match) return null;
-  const price = parseFloat(match[1].replace(",", "."));
-  return !isNaN(price) && price > 0 && price < 50000 ? price : null;
-}
-
-// ─── Scraper 123elec ──────────────────────────────────────────────────────────
-
-async function scrape123elec(
-  query: string,
+export async function scrapeUrl(
+  url: string,
+  enseigne: string,
   product: ProductInfo
 ): Promise<ScraperResult> {
-  const searchUrl = `https://www.123elec.com/catalogsearch/result/?q=${encodeURIComponent(query)}`;
+  // Mapping enseigne vers source
+  const sourceMap: Record<string, ResultSource> = {
+    "Leroy Merlin": "scraper_leroymerlin",
+    "Brico Dépôt": "scraper_bricodepot",
+    "Bricomarché": "scraper_bricomarche",
+    "L'Entrepôt du Bricolage": "scraper_entrepot_du_bricolage",
+    "Gedimat": "scraper_gedimat",
+    "123elec": "scraper_123elec",
+    "ManoMano": "scraper_manomano",
+    "Bricozor": "scraper_bricozor",
+    "Amazon": "scraper_amazon",
+  };
+
+  const source = sourceMap[enseigne] || "scraper_leroymerlin";
 
   try {
-    const response = await fetchStealth(searchUrl);
+    logScraper(enseigne, `Fetch URL: ${url.substring(0, 80)}...`);
+    const response = await fetchStealth(url);
     const html = await response.text();
     const $ = cheerio.load(html);
+    
+    const extraction = extractGenericHTML(html, $);
+    logExtraction(enseigne, extraction.strategy, !!extraction.prix, extraction.prix ? undefined : "price_not_found");
 
-    const productItem = $(".product-item").first();
-    if (!productItem.length) {
-      // Retourner quand même l'URL de recherche comme lien de fallback
-      return {
-        success: true,
-        result: {
-          enseigne: "123elec",
-          titre: `Recherche "${query}" sur 123elec`,
-          prix: null,
-          prix_status: "not_found" as PrixStatus,
-          lien: searchUrl,
-          source: "scraper_123elec" as ResultSource,
-          relevance_score: 30,
-          retrieved_at: new Date().toISOString(),
-        },
-      };
-    }
-
-    const titre = productItem.find(".product-item-link").text().trim() || `Produit 123elec`;
-    const priceText = productItem.find(".price").text();
-    const prix = parsePriceText(priceText);
-    const score = calculateRelevanceScore(titre, product);
-
-    if (score < MIN_RELEVANCE_SCORE - 10) {
-      return { success: false, error: `relevance_too_low_${score}` };
-    }
-
-    const lien = productItem.find("a.product-item-link").attr("href") || searchUrl;
+    const score = extraction.titre ? calculateRelevanceScore(extraction.titre, product) : 30;
 
     return {
       success: true,
       result: {
-        enseigne: "123elec",
-        titre,
-        prix,
-        prix_status: prix !== null ? "detected" : "not_found",
-        lien,
-        source: "scraper_123elec",
+        enseigne,
+        titre: extraction.titre || `Produit ${enseigne}`,
+        prix: extraction.prix,
+        prix_status: extraction.prix ? "detected" : "not_found",
+        lien: url,
+        source,
+        image_url: extraction.image,
         relevance_score: score,
         retrieved_at: new Date().toISOString(),
-      },
+      }
     };
   } catch (err: any) {
-    return {
-      success: false,
-      error: err.message,
-      blocked: err.message.includes("BLOCKED"),
+    logExtraction(enseigne, "none", false, err.message);
+    return { 
+      success: false, 
+      error: err.message, 
+      blocked: err.message.includes("BLOCKED") 
     };
   }
 }
 
-// ─── Scraper ManoMano ─────────────────────────────────────────────────────────
+// ─── Scrapers Spécifiques (Wrappers) ──────────────────────────────────────────
 
-async function scrapeManoMano(
+async function scrapeSearchGeneric(
+  name: string,
+  searchPattern: string,
+  source: ResultSource,
   query: string,
   product: ProductInfo
 ): Promise<ScraperResult> {
-  const searchUrl = `https://www.manomano.fr/recherche/${encodeURIComponent(query)}`;
-
-  try {
-    const response = await fetchStealth(searchUrl);
-    const html = await response.text();
-
-    // ManoMano charge ses prix via JSON-LD ou injection script
-    const jsonLdMatch = html.match(/"price"\s*:\s*"?(\d+[.,]?\d*)"?/);
-    const nameMatch = html.match(/"name"\s*:\s*"([^"]{5,150})"/);
-
-    let prix: number | null = null;
-    let titre = nameMatch ? nameMatch[1] : `Recherche "${query}" sur ManoMano`;
-
-    if (jsonLdMatch) {
-      prix = parsePriceText(jsonLdMatch[1]);
-    } else {
-      // Essai avec cheerio (parfois rendu côté serveur)
-      const $ = cheerio.load(html);
-      const priceEl = $("[class*='price']:not([class*='strike'])").first().text();
-      prix = parsePriceText(priceEl);
-      const titleEl = $("h1, [class*='title']").first().text().trim();
-      if (titleEl) titre = titleEl;
-    }
-
-    const score = calculateRelevanceScore(titre, product);
-    if (score < MIN_RELEVANCE_SCORE - 10) {
-      return { success: false, error: `relevance_too_low_${score}` };
-    }
-
-    return {
-      success: true,
-      result: {
-        enseigne: "ManoMano",
-        titre,
-        prix,
-        prix_status: prix !== null ? "detected" : "not_found",
-        lien: searchUrl,
-        source: "scraper_manomano",
-        relevance_score: score,
-        retrieved_at: new Date().toISOString(),
-      },
-    };
-  } catch (err: any) {
-    return {
-      success: false,
-      error: err.message,
-      blocked: err.message.includes("BLOCKED"),
-    };
-  }
-}
-
-// ─── Scraper Bricozor ─────────────────────────────────────────────────────────
-
-async function scrapeBricozor(
-  query: string,
-  product: ProductInfo
-): Promise<ScraperResult> {
-  const searchUrl = `https://www.bricozor.com/recherche?q=${encodeURIComponent(query)}`;
-
-  try {
-    const response = await fetchStealth(searchUrl);
-    const html = await response.text();
-    const $ = cheerio.load(html);
-
-    // Bricozor : structure produit classique Prestashop
-    const productItem = $(".product-miniature, .product-container, .ajax_block_product").first();
-
-    let titre = `Recherche "${query}" sur Bricozor`;
-    let lien = searchUrl;
-    let prix: number | null = null;
-
-    if (productItem.length) {
-      const foundTitle = productItem.find(".product-title, .product_name, h3, h2").first().text().trim();
-      if (foundTitle) titre = foundTitle;
-      const priceText = productItem.find(".price, .product-price, .product_price").first().text();
-      prix = parsePriceText(priceText);
-      const lienEl = productItem.find("a").first().attr("href") || "";
-      lien = lienEl.startsWith("http") ? lienEl : `https://www.bricozor.com${lienEl}`;
-    }
-
-    const score = calculateRelevanceScore(titre, product);
-    if (score < MIN_RELEVANCE_SCORE - 10) {
-      return { success: false, error: `relevance_too_low_${score}` };
-    }
-
-    return {
-      success: true,
-      result: {
-        enseigne: "Bricozor",
-        titre,
-        prix,
-        prix_status: prix !== null ? "detected" : "not_found",
-        lien,
-        source: "scraper_bricozor" as ResultSource,
-        relevance_score: score,
-        retrieved_at: new Date().toISOString(),
-      },
-    };
-  } catch (err: any) {
-    return {
-      success: false,
-      error: err.message,
-      blocked: err.message.includes("BLOCKED"),
-    };
-  }
-}
-
-// ─── Scraper Amazon ───────────────────────────────────────────────────────────
-
-async function scrapeAmazon(
-  query: string,
-  product: ProductInfo
-): Promise<ScraperResult> {
-  const searchUrl = `https://www.amazon.fr/s?k=${encodeURIComponent(query)}`;
-
-  try {
-    const response = await fetchStealth(searchUrl);
-    const html = await response.text();
-
-    // Amazon utilise un HTML très spécifique
-    const wholeMatch = html.match(/<span class="a-price-whole">(\d+)[,.]?/);
-    const fractionMatch = html.match(/<span class="a-price-fraction">(\d+)<\/span>/);
-    const titleMatch = html.match(/<span class="a-size-medium a-color-base a-text-normal">([^<]{5,200})<\/span>/);
-
-    let prix: number | null = null;
-    if (wholeMatch) {
-      prix = parseFloat(`${wholeMatch[1]}.${fractionMatch ? fractionMatch[1] : "00"}`);
-      if (isNaN(prix) || prix <= 0) prix = null;
-    }
-
-    const titre = titleMatch ? titleMatch[1].trim() : `Recherche "${query}" sur Amazon`;
-    const score = calculateRelevanceScore(titre, product);
-    if (score < MIN_RELEVANCE_SCORE - 10) {
-      return { success: false, error: `relevance_too_low_${score}` };
-    }
-
-    return {
-      success: true,
-      result: {
-        enseigne: "Amazon",
-        titre,
-        prix,
-        prix_status: prix !== null ? "detected" : "not_found",
-        lien: searchUrl,
-        source: "scraper_amazon",
-        relevance_score: score,
-        retrieved_at: new Date().toISOString(),
-      },
-    };
-  } catch (err: any) {
-    return {
-      success: false,
-      error: err.message,
-      blocked: err.message.includes("BLOCKED"),
-    };
-  }
+  const url = searchPattern.replace("{{query}}", encodeURIComponent(query));
+  return scrapeUrl(url, name, product);
 }
 
 // ─── Définition des scrapers disponibles ─────────────────────────────────────
 
-interface FallbackScraper {
+export interface FallbackScraper {
   name: string;
   source: ResultSource;
   fn: (query: string, product: ProductInfo) => Promise<ScraperResult>;
   enabled: boolean;
 }
 
-const FALLBACK_SCRAPERS: FallbackScraper[] = [
+export const FALLBACK_SCRAPERS: FallbackScraper[] = [
   {
     name: "123elec",
     source: "scraper_123elec",
-    fn: scrape123elec,
+    fn: (q, p) => scrapeSearchGeneric("123elec", "https://www.123elec.com/catalogsearch/result/?q={{query}}", "scraper_123elec", q, p),
     enabled: true,
   },
   {
     name: "ManoMano",
     source: "scraper_manomano",
-    fn: scrapeManoMano,
+    fn: (q, p) => scrapeSearchGeneric("ManoMano", "https://www.manomano.fr/recherche/{{query}}", "scraper_manomano", q, p),
     enabled: true,
   },
   {
     name: "Bricozor",
     source: "scraper_bricozor",
-    fn: scrapeBricozor,
+    fn: (q, p) => scrapeSearchGeneric("Bricozor", "https://www.bricozor.com/recherche?q={{query}}", "scraper_bricozor", q, p),
+    enabled: true,
+  },
+  {
+    name: "Leroy Merlin",
+    source: "scraper_leroymerlin",
+    fn: (q, p) => scrapeSearchGeneric("Leroy Merlin", "https://www.leroymerlin.fr/recherche?q={{query}}", "scraper_leroymerlin", q, p),
+    enabled: true,
+  },
+  {
+    name: "Brico Dépôt",
+    source: "scraper_bricodepot",
+    fn: (q, p) => scrapeSearchGeneric("Brico Dépôt", "https://www.bricodepot.fr/recherche/search.jsp?query={{query}}", "scraper_bricodepot", q, p),
+    enabled: true,
+  },
+  {
+    name: "Bricomarché",
+    source: "scraper_bricomarche",
+    fn: (q, p) => scrapeSearchGeneric("Bricomarché", "https://www.bricomarche.com/recherche?text={{query}}", "scraper_bricomarche", q, p),
+    enabled: true,
+  },
+  {
+    name: "L'Entrepôt du Bricolage",
+    source: "scraper_entrepot_du_bricolage",
+    fn: (q, p) => scrapeSearchGeneric("L'Entrepôt du Bricolage", "https://www.entrepot-du-bricolage.fr/recherche?q={{query}}", "scraper_entrepot_du_bricolage", q, p),
+    enabled: true,
+  },
+  {
+    name: "Gedimat",
+    source: "scraper_gedimat",
+    fn: (q, p) => scrapeSearchGeneric("Gedimat", "https://www.gedimat.fr/recherche.php?q={{query}}", "scraper_gedimat", q, p),
     enabled: true,
   },
   {
     name: "Amazon",
     source: "scraper_amazon",
-    fn: scrapeAmazon,
+    fn: (q, p) => scrapeSearchGeneric("Amazon", "https://www.amazon.fr/s?k={{query}}", "scraper_amazon", q, p),
     enabled: true,
   },
 ];
@@ -378,15 +357,6 @@ export interface FallbackResult {
   };
 }
 
-/**
- * Lance les scrapers fallback avec limitation du parallélisme et anti-403.
- * Retourne les résultats avec OU sans prix — un seul résultat par enseigne.
- *
- * @param query - Requête de recherche
- * @param product - Infos produit pour scoring pertinence
- * @param existingEnseignes - Enseignes déjà trouvées (pour ne pas dupliquer)
- * @param onResult - Callback appelé dès qu'un résultat est disponible
- */
 export async function runFallbackScrapers(
   query: string,
   product: ProductInfo,
@@ -399,56 +369,47 @@ export async function runFallbackScrapers(
 
   let consecutiveBlocked = 0;
 
-  // Traitement séquentiel avec délai (plus stable que parallèle pour les scrapers)
   for (let i = 0; i < activeScrapers.length; i++) {
-    // Arrêt automatique si trop de blocages consécutifs
     if (consecutiveBlocked >= MAX_CONSECUTIVE_403) {
-      console.log(`[FallbackScrapers] Stop auto: ${consecutiveBlocked} blocages consécutifs`);
+      console.log(`[FallbackScrapers] STOP: ${consecutiveBlocked} blocages consécutifs`);
       break;
     }
 
-    // Limite le nombre de scrapers en parallèle (traitement par batch)
     const batch = activeScrapers.slice(i, i + MAX_PARALLEL);
 
     const batchPromises = batch.map(async (scraper) => {
       stats.tried.push(scraper.name);
-      console.log(`[FallbackScrapers] Démarrage: ${scraper.name}`);
+      
+      // Ne pas lancer si l'enseigne est déjà présente avec un prix
+      if (existingEnseignes.has(scraper.name)) {
+        logScraper(scraper.name, "Déjà trouvé, skip");
+        return;
+      }
 
+      logScraper(scraper.name, "START");
       const scraperResult = await scraper.fn(query, product);
 
       if (scraperResult.blocked) {
         consecutiveBlocked++;
         stats.blocked.push(scraper.name);
-        console.log(`[FallbackScrapers] BLOQUÉ: ${scraper.name}`);
       } else if (scraperResult.success && scraperResult.result) {
-        consecutiveBlocked = 0; // Reset si succès
+        consecutiveBlocked = 0;
         const result = scraperResult.result;
-
-        // Ne pas dupliquer si l'enseigne a déjà été trouvée par Google CSE
-        // Exception : si Google n'avait pas de prix mais le scraper en a un
-        if (existingEnseignes.has(result.enseigne)) {
-          console.log(`[FallbackScrapers] Enseigne déjà trouvée, ignoré: ${result.enseigne}`);
-          return; // skip, enseigne déjà présente
-        }
 
         stats.success.push(scraper.name);
         allResults.push(result);
         if (onResult) onResult(result, scraper.name);
-        console.log(
-          `[FallbackScrapers] Succès: ${scraper.name} — ` +
-          (result.prix !== null ? `${result.prix}€` : "lien sans prix")
-        );
+        logScraper(scraper.name, `FIN: ${result.prix ? result.prix + "€" : "pas de prix"}`);
       } else {
         consecutiveBlocked = Math.max(0, consecutiveBlocked - 1);
         stats.errors.push(scraper.name);
-        console.log(`[FallbackScrapers] Échec: ${scraper.name} — ${scraperResult.error}`);
+        logScraper(scraper.name, `ECHEC: ${scraperResult.error}`);
       }
     });
 
     await Promise.all(batchPromises);
-    i += MAX_PARALLEL - 1; // Avancer dans la boucle de la taille du batch
+    i += MAX_PARALLEL - 1;
 
-    // Délai entre les batches
     if (i < activeScrapers.length - 1 && consecutiveBlocked < MAX_CONSECUTIVE_403) {
       await randomDelay();
     }

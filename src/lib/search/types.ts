@@ -11,6 +11,11 @@ export type ResultSource =
   | "scraper_manomano"
   | "scraper_bricozor"
   | "scraper_amazon"
+  | "scraper_leroymerlin"
+  | "scraper_bricodepot"
+  | "scraper_bricomarche"
+  | "scraper_entrepot_du_bricolage"
+  | "scraper_gedimat"
   | "manual";        // Prix saisi manuellement dans la fiche produit
 
 // ─── Statut du prix pour un résultat ────────────────────────────────────────
