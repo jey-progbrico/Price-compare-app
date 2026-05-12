@@ -13,7 +13,8 @@ export default async function ProduitsPage() {
     const { data, error } = await supabase
       .from("produits")
       .select("numero_ean, description_produit, marque, prix_vente, devise")
-      .order("numero_ean", { ascending: false });
+      .order("numero_ean", { ascending: false })
+      .range(0, 3000);
 
     if (error) {
       console.error("Erreur produits:", error);
