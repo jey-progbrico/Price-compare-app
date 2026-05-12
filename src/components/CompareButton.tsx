@@ -365,7 +365,7 @@ export default function CompareButton({
   // ─── Démarrage de la recherche SSE ──────────────────────────────────────
 
   const startSearch = (force = false) => {
-    console.log(`[FRONTEND] LIVE SEARCH START | EAN: ${ean} | Force: ${force}`);
+    console.log(`[FRONTEND] STARTING LIVE SEARCH | EAN: ${ean} | Force: ${force}`);
     setPhase("searching");
     setError(null);
     if (!force) {
@@ -381,9 +381,11 @@ export default function CompareButton({
     }
 
     const url = `/api/search/stream?ean=${encodeURIComponent(ean)}${force ? "&force=1" : ""}`;
-    console.log(`[FRONTEND] STREAM CONNECT | URL: ${url}`);
-    const eventSource = new EventSource(url);
-    streamRef.current = eventSource;
+    console.log(`[FRONTEND] OPENING EVENTSOURCE | URL: ${url}`);
+    
+    try {
+      const eventSource = new EventSource(url);
+      streamRef.current = eventSource;
 
     eventSource.onopen = () => console.log("[FRONTEND] STREAM OPENED");
 
@@ -493,23 +495,26 @@ export default function CompareButton({
         </div>
       )}
 
-      {/* ── Bouton de recherche ────────────────────────────────────────────── */}
-      {(isIdle || isDone) && !isSearching && (
-        <button
-          onClick={() => startSearch(false)}
-          className="w-full bg-gradient-to-r from-red-600 to-red-500 hover:from-red-500 hover:to-red-400
-                     text-white font-bold py-4 rounded-2xl transition-all duration-200
-                     flex items-center justify-center gap-3
-                     shadow-[0_0_30px_rgba(220,38,38,0.35)]
-                     hover:shadow-[0_0_40px_rgba(220,38,38,0.5)]
-                     hover:scale-[1.01] active:scale-[0.99]"
-        >
-          <Search className="w-5 h-5" />
-          {results.length > 0 && !hasStale
-            ? "Actualiser les prix"
-            : "Rechercher les prix concurrents"}
-        </button>
-      )}
+      {/* Bouton de recherche — Forcé visible pour debug */}
+      <button
+        onClick={() => {
+          console.log("[FRONTEND] COMPARE BUTTON CLICKED");
+          startSearch(false);
+        }}
+        className="w-full bg-gradient-to-r from-red-600 to-red-500 hover:from-red-500 hover:to-red-400
+                   text-white font-bold py-4 rounded-2xl transition-all duration-200
+                   flex items-center justify-center gap-3
+                   shadow-[0_0_30px_rgba(220,38,38,0.35)]
+                   hover:shadow-[0_0_40px_rgba(220,38,38,0.5)]
+                   hover:scale-[1.01] active:scale-[0.99]
+                   disabled:opacity-50 disabled:cursor-not-allowed"
+        disabled={isSearching}
+      >
+        {isSearching ? <Loader2 className="w-5 h-5 animate-spin" /> : <Search className="w-5 h-5" />}
+        {results.length > 0 && !hasStale
+          ? "Actualiser les prix"
+          : "Rechercher les prix concurrents"}
+      </button>
 
       {/* ── Progression pendant la recherche ─────────────────────────────── */}
       {isSearching && (
