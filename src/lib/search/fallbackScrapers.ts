@@ -152,7 +152,7 @@ export async function scrapeUrl(
     const extraction = extractGenericHTML(html, $);
     const score = calculateRelevanceScore(extraction.titre || "", url, product);
 
-    const sourceName = ("scraper_" + enseigne.toLowerCase().replace(/\s+/g, "_")) as ResultSource;
+    const sourceName = ("scraper_" + enseigne.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, "")) as ResultSource;
 
     return {
       success: true,
@@ -267,7 +267,7 @@ export async function discoverViaMerchantSearch(
         prix: extraction.prix,
         prix_status: "detected",
         lien: response.url,
-        source: ("scraper_" + name.toLowerCase().replace(/\s+/g, "_")) as ResultSource,
+        source: ("scraper_" + name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, "")) as ResultSource,
         relevance_score: calculateRelevanceScore(extraction.titre, response.url, product),
         retrieved_at: new Date().toISOString(),
       }];
@@ -357,7 +357,13 @@ export async function runFallbackScrapers(
   // 1. DuckDuckGo
   try {
     const ddg = await discoverViaDuckDuckGo(query, product);
-    ddg.forEach(r => { if (r.relevance_score > 25) { allResults.push(r); candidateCount++; if (onResult) onResult(r, "DuckDuckGo"); } });
+    ddg.forEach(r => { 
+      if ((r.relevance_score ?? 0) > 25) { 
+        allResults.push(r); 
+        candidateCount++; 
+        if (onResult) onResult(r, "DuckDuckGo"); 
+      } 
+    });
   } catch {}
 
   // 2. Merchants

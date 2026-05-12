@@ -16,6 +16,7 @@ export type ResultSource =
   | "scraper_bricomarche"
   | "scraper_entrepot_du_bricolage"
   | "scraper_gedimat"
+  | "scraper_duckduckgo"
   | "manual";        // Prix saisi manuellement dans la fiche produit
 
 // ─── Statut du prix pour un résultat ────────────────────────────────────────
