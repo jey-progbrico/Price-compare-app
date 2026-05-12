@@ -1,6 +1,6 @@
 import * as cheerio from "cheerio";
 import type { SearchResult, ProductInfo, ResultSource, PrixStatus } from "./types";
-import { calculateRelevanceScore } from "./queryBuilder";
+import { calculateRelevanceScore, calculateUrlQuality } from "./queryBuilder";
 
 /**
  * Fallback Scrapers — Vigiprix (v3)
@@ -233,6 +233,13 @@ export async function scrapeUrl(
   const source = sourceMap[enseigne] || "scraper_leroymerlin";
 
   try {
+    const urlQuality = calculateUrlQuality(url);
+    // On ne rejette que si le score de qualité est extrêmement bas (page search évidente)
+    if (urlQuality < 0.4) {
+      logScraper(enseigne, `SKIP: Qualité URL trop faible (${urlQuality}), probablement une page listing.`);
+      return { success: false, error: "low_url_quality" };
+    }
+
     logScraper(enseigne, `Fetch URL: ${url.substring(0, 80)}...`);
     const response = await fetchStealth(url);
     const html = await response.text();
@@ -241,7 +248,7 @@ export async function scrapeUrl(
     const extraction = extractGenericHTML(html, $);
     logExtraction(enseigne, extraction.strategy, !!extraction.prix, extraction.prix ? undefined : "price_not_found");
 
-    const score = extraction.titre ? calculateRelevanceScore(extraction.titre, product) : 30;
+    const score = extraction.titre ? calculateRelevanceScore(extraction.titre, url, product) : 30;
 
     return {
       success: true,

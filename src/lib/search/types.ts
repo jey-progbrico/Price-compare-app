@@ -57,6 +57,7 @@ export interface ProductInfo {
   marque?: string | null;
   designation?: string | null;       // description_produit dans la DB
   reference_fabricant?: string | null;
+  categorie?: string | null;
 }
 
 // ─── Entrée de cache Supabase ────────────────────────────────────────────────

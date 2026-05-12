@@ -28,7 +28,7 @@ export async function GET(request: Request) {
     try {
       const { data: produit } = await supabase
         .from("produits")
-        .select("marque, description_produit, reference_fabricant")
+        .select("marque, description_produit, reference_fabricant, categorie_produit")
         .eq("numero_ean", ean)
         .single();
 
@@ -38,6 +38,7 @@ export async function GET(request: Request) {
           marque: produit.marque ?? null,
           designation: produit.description_produit ?? null,
           reference_fabricant: produit.reference_fabricant ?? null,
+          categorie: produit.categorie_produit ?? null,
         };
       }
     } catch (dbErr: any) {

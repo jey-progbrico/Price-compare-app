@@ -1,40 +1,39 @@
 import type { ProductInfo } from "./types";
 
 /**
- * QueryBuilder — Vigiprix
+ * QueryBuilder — Vigiprix (v5)
  *
- * Construit des requêtes de recherche optimisées selon la priorité :
- * 1. Référence fabricant + marque  (ex: "Ryobi R18PD3-215G")
- * 2. EAN seul
- * 3. Marque + désignation enrichie
- *
- * Les requêtes sont optimisées pour Google Custom Search (résultats shopping).
+ * Améliorations v5 (Équilibrage) :
+ * - Pénalité URL assouplie (score modéré plutôt que rejet massif)
+ * - Pondération rééquilibrée : plus de poids sur le titre et la marque
+ * - Support des recherches larges si nécessaire
  */
 
 // ─── Nettoyage texte ─────────────────────────────────────────────────────────
 
 function cleanText(text: string): string {
+  if (!text) return "";
   return text
     .trim()
     .replace(/\s+/g, " ")
-    .replace(/["""'']/g, "");
+    .replace(/["'']/g, "");
 }
 
 /**
- * Extrait les N premiers mots significatifs d'une désignation.
- * Supprime les stop words, unités de mesure, etc.
+ * Extrait les mots-clés les plus importants d'une désignation.
  */
 function extractKeywords(designation: string, maxWords = 5): string {
   const stopWords = new Set([
     "le", "la", "les", "un", "une", "des", "de", "du", "en", "pour",
-    "avec", "sans", "et", "ou", "à", "au", "aux", "par", "sur", "sous"
+    "avec", "sans", "et", "ou", "à", "au", "aux", "par", "sur", "sous",
+    "neuf", "occasion", "pas", "cher"
   ]);
 
   const normalized = designation
     .toLowerCase()
     .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")           // Enlever accents
-    .replace(/[.,\/#!$%^&*;:{}=\-_`~()]/g, " ") // Ponctuation → espace
+    .replace(/[\u0300-\u036f]/g, "")           // Accents
+    .replace(/[.,\/#!$%^&*;:{}=\-_`~()]/g, " ") // Ponctuation
     .replace(/\b\d+\s*(l|kg|g|mm|cm|m|v|ah|w|kw|ml|cl)\b/gi, ""); // Unités
 
   const words = normalized
@@ -47,87 +46,79 @@ function extractKeywords(designation: string, maxWords = 5): string {
 // ─── Interface publique ──────────────────────────────────────────────────────
 
 export interface SearchQuery {
-  query: string;          // Texte de la requête
-  priority: number;       // 1 = plus haute priorité
+  query: string;
+  priority: number;
   type: "ref_fabricant" | "ean" | "designation" | "mixed";
-  description: string;   // Pour les logs debug
+  description: string;
 }
 
 /**
  * Génère la liste ordonnée des requêtes à tester.
- * Retourne toujours au moins une requête (EAN).
  */
 export function buildSearchQueries(product: ProductInfo): SearchQuery[] {
   const queries: SearchQuery[] = [];
-  const { ean, marque, designation, reference_fabricant } = product;
+  const { ean, marque, designation, reference_fabricant, categorie } = product;
 
   const cleanMarque = marque ? cleanText(marque) : null;
   const cleanRef = reference_fabricant ? cleanText(reference_fabricant) : null;
   const cleanDesig = designation ? cleanText(designation) : null;
+  const cleanCat = categorie ? cleanText(categorie) : null;
 
-  // ─── PRIORITÉ 1 : Référence fabricant + marque ───────────────────────────
-  // Ex: "Ryobi R18PD3-215G" → résultat Google le plus précis possible
+  // On réduit les patterns négatifs pour ne pas brider Google outre mesure
+  const searchNegativePatterns = "-inurl:catalogsearch -inurl:searchresults";
+
+  // 1. EAN Exact
+  queries.push({
+    query: `"${ean}"`,
+    priority: 1,
+    type: "ean",
+    description: `EAN exact: ${ean}`
+  });
+
+  // 2. Marque + Référence Fabricant
   if (cleanRef && cleanMarque) {
     queries.push({
-      query: `${cleanMarque} ${cleanRef}`,
-      priority: 1,
+      query: `"${cleanMarque}" "${cleanRef}"`,
+      priority: 2,
       type: "ref_fabricant",
       description: `Marque + Référence: ${cleanMarque} ${cleanRef}`
     });
-  } else if (cleanRef) {
+  }
+
+  // 3. Référence seule
+  if (cleanRef && cleanRef.length > 3) {
     queries.push({
-      query: cleanRef,
-      priority: 1,
+      query: `"${cleanRef}"`,
+      priority: 3,
       type: "ref_fabricant",
       description: `Référence seule: ${cleanRef}`
     });
   }
 
-  // ─── PRIORITÉ 2 : EAN seul ───────────────────────────────────────────────
-  // L'EAN est le plus unique et précis pour identifier un produit exact
-  queries.push({
-    query: `"${ean}" -inurl:search -inurl:recherche -inurl:catalogsearch`,
-    priority: 2,
-    type: "ean",
-    description: `EAN: ${ean}`
-  });
-
-  // ─── PRIORITÉ 2B : EAN + prix ───────────────────────────────
-
-queries.push({
-  query: `"${ean}" prix -inurl:search -inurl:recherche`,
-  priority: 2,
-  type: "ean",
-  description: `EAN + prix: ${ean}`
-});
-
-  // ─── PRIORITÉ 3 : Marque + Désignation simplifiée ────────────────────────
+  // 4. Marque + Mots-clés désignation (Plus large)
   if (cleanMarque && cleanDesig) {
-    const keywords = extractKeywords(cleanDesig);
+    const keywords = extractKeywords(cleanDesig, 4);
     if (keywords) {
       queries.push({
-        query: `${cleanMarque} ${keywords} -inurl:search -inurl:recherche`,
-        priority: 3,
+        query: `${cleanMarque} ${keywords} ${cleanCat || ""} ${searchNegativePatterns}`,
+        priority: 4,
         type: "mixed",
         description: `Marque + Mots-clés: ${cleanMarque} ${keywords}`
       });
     }
   }
 
-  // ─── PRIORITÉ 4 : Désignation seule (dernier recours) ───────────────────
-  if (cleanDesig) {
-    const keywords = extractKeywords(cleanDesig, 4);
-    if (keywords && !queries.some(q => q.query === keywords)) {
-      queries.push({
-        query: `${keywords} -inurl:search -inurl:recherche`,
-        priority: 4,
-        type: "designation",
-        description: `Mots-clés désignation: ${keywords}`
+  // 5. Fallback large si nécessaire
+  if (cleanMarque && !cleanRef) {
+     queries.push({
+        query: `${cleanMarque} ${ean}`,
+        priority: 5,
+        type: "mixed",
+        description: `Marque + EAN fallback`
       });
-    }
   }
 
-  // Dédupliquer et trier par priorité
+  // Dédupliquer et trier
   const seen = new Set<string>();
   return queries
     .filter(q => {
@@ -139,54 +130,98 @@ queries.push({
 }
 
 /**
- * Construit la requête optimisée pour Google Custom Search Shopping.
- * Ajoute "prix" pour biaiser vers les pages produits avec tarif.
+ * Calcule un score de qualité pour une URL (0.5 à 1.0).
+ * Assoupli : plus de rejet automatique, juste une pénalité.
  */
-export function buildGoogleShoppingQuery(baseQuery: string): string {
-  // Google CSE: la requête doit rester concise pour des résultats shopping
-  // On n'ajoute PAS "prix" car le CSE est configuré pour cibler des sites marchands
-  return baseQuery.trim();
+export function calculateUrlQuality(url: string): number {
+  const urlLower = url.toLowerCase();
+  
+  // Patterns de pages de résultats (souvent suspects mais parfois valides)
+  const suspiciousPatterns = [
+    "/search", "/recherche", "/catalogsearch", "/search?", "/s?", 
+    "?q=", "results", "listing", "filter", "tri=", "sort="
+  ];
+  
+  const isSuspicious = suspiciousPatterns.some(p => urlLower.includes(p));
+  
+  // Patterns de catégories (souvent moins pertinents pour une fiche)
+  const categoryPatterns = ["/c/", "/categorie", "/rayon", "/category/"];
+  const isCategory = categoryPatterns.some(p => urlLower.includes(p));
+
+  let penalty = 1.0;
+  if (isSuspicious) penalty -= 0.3; // Pénalité modérée
+  if (isCategory) penalty -= 0.1;
+
+  // Patterns indiquant une fiche produit (bonus)
+  const productPatterns = [
+    /\d{8,13}/, 
+    /\.html$/, 
+    /\b(p|prod|product|article|ref)\b/i,
+    /p-/, /pr\d+/
+  ];
+  
+  const isLikelyProduct = productPatterns.some(p => p.test(urlLower));
+  if (isLikelyProduct) penalty += 0.1;
+
+  return Math.min(1.0, Math.max(0.5, penalty)); // Score entre 0.5 et 1.0
 }
 
 /**
- * Vérifie si un titre trouvé correspond bien au produit recherché.
- * Score 0–100.
+ * Score de pertinence global (0-100).
+ * Pondération rééquilibrée.
  */
 export function calculateRelevanceScore(
   foundTitle: string,
+  url: string,
   product: ProductInfo
 ): number {
   if (!foundTitle) return 0;
 
   const titleLower = foundTitle.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-
-  // L'EAN dans le titre → correspondance quasi-certaine
-  if (titleLower.includes(product.ean)) return 100;
-
-  // La référence fabricant → très fort signal
-  if (product.reference_fabricant) {
-    const refClean = product.reference_fabricant.toLowerCase();
-    if (titleLower.includes(refClean)) return 95;
-  }
+  const urlLower = url.toLowerCase();
+  const urlQuality = calculateUrlQuality(url);
 
   let score = 0;
-  let maxScore = 0;
+  let maxPossible = 0;
 
-  // Marque (30 pts)
-  if (product.marque) {
-    maxScore += 30;
-    const brandLower = product.marque.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-    if (titleLower.includes(brandLower)) score += 30;
+  // 1. EAN (Match parfait) - 100%
+  if (titleLower.includes(product.ean) || urlLower.includes(product.ean)) {
+    return Math.round(100 * urlQuality);
   }
 
-  // Désignation (70 pts — répartis sur les mots-clés)
+  // 2. Marque (30 pts)
+  if (product.marque) {
+    maxPossible += 30;
+    const brand = product.marque.toLowerCase();
+    if (titleLower.includes(brand)) {
+      score += 30;
+    }
+  }
+
+  // 3. Référence fabricant (30 pts)
+  if (product.reference_fabricant) {
+    maxPossible += 30;
+    const ref = product.reference_fabricant.toLowerCase();
+    if (titleLower.includes(ref) || urlLower.includes(ref)) {
+      score += 30;
+    }
+  }
+
+  // 4. Désignation technique (40 pts)
   if (product.designation) {
-    maxScore += 70;
+    maxPossible += 40;
     const keywords = extractKeywords(product.designation, 6).split(" ");
     const matchCount = keywords.filter(k => k && titleLower.includes(k)).length;
-    score += (matchCount / Math.max(keywords.length, 1)) * 70;
+    score += (matchCount / Math.max(keywords.length, 1)) * 40;
   }
 
-  if (maxScore === 0) return 50; // Pas d'info → score neutre (on accepte)
-  return Math.round((score / maxScore) * 100);
+  const baseScore = maxPossible > 0 ? Math.round((score / maxPossible) * 100) : 50;
+  
+  // Appliquer la qualité de l'URL comme facteur modérateur
+  const finalScore = Math.round(baseScore * urlQuality);
+
+  // Debug logs (interne)
+  // console.log(`[Score] Base: ${baseScore} | Quality: ${urlQuality} | Final: ${finalScore}`);
+
+  return finalScore;
 }
