@@ -1,14 +1,13 @@
 import * as cheerio from "cheerio";
 import type { SearchResult, ProductInfo, ResultSource, PrixStatus } from "./types";
-import { calculateRelevanceScore, calculateUrlQuality } from "./queryBuilder";
+import { calculateRelevanceScore, estimateProductPageProbability, detectHtmlProductSignals } from "./queryBuilder";
 
 /**
- * Fallback Scrapers — Vigiprix (v3)
+ * Fallback Scrapers — Vigiprix (v4)
  * 
- * Améliorations v3 :
- * - Extraction générique (JSON-LD, Meta tags, Sélecteurs communs)
- * - Support étendu : Leroy Merlin, Brico Dépôt, Bricomarché, Entrepôt, Gedimat
- * - Logging amélioré (stratégie, succès/échec)
+ * Améliorations v4 :
+ * - Détection probabiliste de fiche produit (URL + Signaux HTML)
+ * - Validation HTML légère avant extraction complète
  */
 
 // ─── Configuration ─────────────────────────────────────────────────────────────
@@ -233,11 +232,12 @@ export async function scrapeUrl(
   const source = sourceMap[enseigne] || "scraper_leroymerlin";
 
   try {
-    const urlQuality = calculateUrlQuality(url);
-    // On ne rejette que si le score de qualité est extrêmement bas (page search évidente)
-    if (urlQuality < 0.4) {
-      logScraper(enseigne, `SKIP: Qualité URL trop faible (${urlQuality}), probablement une page listing.`);
-      return { success: false, error: "low_url_quality" };
+    const urlInfo = estimateProductPageProbability(url, product);
+    if (urlInfo.type === 'search' || urlInfo.type === 'category') {
+      if (urlInfo.probability < 0.3) {
+        logScraper(enseigne, `SKIP: Probabilité produit trop faible (${Math.round(urlInfo.probability*100)}%) | Raison: ${urlInfo.reason}`);
+        return { success: false, error: "low_product_probability" };
+      }
     }
 
     logScraper(enseigne, `Fetch URL: ${url.substring(0, 80)}...`);
@@ -245,10 +245,14 @@ export async function scrapeUrl(
     const html = await response.text();
     const $ = cheerio.load(html);
     
+    // Signaux HTML
+    const htmlValidation = detectHtmlProductSignals(html);
     const extraction = extractGenericHTML(html, $);
     logExtraction(enseigne, extraction.strategy, !!extraction.prix, extraction.prix ? undefined : "price_not_found");
 
-    const score = extraction.titre ? calculateRelevanceScore(extraction.titre, url, product) : 30;
+    const score = calculateRelevanceScore(extraction.titre || "", url, product, htmlValidation.score);
+    
+    console.log(`[Scraper][${enseigne}] Result Check | Score: ${score}% | ProbURL: ${Math.round(urlInfo.probability*100)}% | Signals: ${htmlValidation.signals.join(",")}`);
 
     return {
       success: true,

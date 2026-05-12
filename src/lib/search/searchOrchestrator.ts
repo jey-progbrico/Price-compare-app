@@ -192,6 +192,7 @@ export async function processScrapingQueue(
     marque: productInfos?.marque,
     designation: productInfos?.designation,
     reference_fabricant: productInfos?.reference_fabricant,
+    categorie: (productInfos as any)?.categorie_produit,
   };
 
   const legacyEvents: unknown[] = [];
