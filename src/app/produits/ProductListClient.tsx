@@ -117,37 +117,32 @@ export default function ProductListClient({
 
       {/* Rendu dynamique : Hiérarchique ou Liste Plate */}
       {!isHierarchicalView || query ? (
-        <div className="space-y-3 pb-24">
+        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-3 lg:gap-2 pb-24">
           {filteredProducts.map((p) => (
             <Link 
               key={p.numero_ean}
               href={`/produit/${p.numero_ean}`}
-              className="flex items-center justify-between p-4 bg-neutral-900 border border-neutral-800 rounded-2xl hover:border-red-600/50 transition-all active:scale-[0.98] group shadow-xl"
+              className="flex items-center justify-between p-4 lg:p-2 lg:py-1.5 bg-neutral-900 border border-neutral-800 rounded-2xl lg:rounded-lg hover:border-red-600/50 transition-all active:scale-[0.98] group shadow-xl"
             >
-              <div className="flex items-center gap-4 min-w-0">
-                <div className="w-10 h-10 bg-neutral-950 rounded-xl flex items-center justify-center text-neutral-700 group-hover:text-red-500 transition-colors shrink-0">
-                  <Package className="w-5 h-5" />
+              <div className="flex items-center gap-4 lg:gap-2.5 min-w-0">
+                <div className="w-10 h-10 lg:w-7 lg:h-7 bg-neutral-950 rounded-xl lg:rounded-md flex items-center justify-center text-neutral-700 group-hover:text-red-500 transition-colors shrink-0">
+                  <Package className="w-5 h-5 lg:w-3.5 lg:h-3.5" />
                 </div>
                 <div className="min-w-0">
-                  <div className="flex items-center gap-2 mb-0.5">
-                    <span className="text-[9px] font-black text-neutral-500 uppercase bg-neutral-800 px-1.5 py-0.5 rounded tracking-tighter">
+                  <div className="flex items-center gap-2 lg:gap-1.5 mb-0.5">
+                    <span className="text-[9px] lg:text-[7px] font-black text-neutral-500 uppercase bg-neutral-800 px-1.5 py-0.5 lg:py-0 rounded tracking-tighter">
                       {p.marque || "Sans marque"}
                     </span>
-                    {p.rayon && (
-                      <span className="text-[9px] font-black text-neutral-600 uppercase tracking-tighter">
-                        {p.rayon}
-                      </span>
-                    )}
                   </div>
-                  <h4 className="text-[13px] font-bold text-white line-clamp-1 group-hover:text-red-500 transition-colors">
+                  <h4 className="text-[13px] lg:text-[11px] font-bold text-white lg:text-neutral-300 line-clamp-1 group-hover:text-red-500 transition-colors leading-tight">
                     {p.description_produit}
                   </h4>
-                  <p className="text-[9px] font-mono text-neutral-600 mt-0.5">EAN: {p.numero_ean}</p>
+                  <p className="text-[9px] lg:text-[7px] font-mono text-neutral-600 mt-0">EAN: {p.numero_ean}</p>
                 </div>
               </div>
-              <div className="text-right shrink-0 ml-4">
-                <div className="text-sm font-black text-white">{Number(p.prix_vente).toFixed(2)}€</div>
-                <div className="text-[8px] font-bold text-neutral-600 uppercase tracking-tighter">Prix Magasin</div>
+              <div className="text-right shrink-0 ml-4 lg:ml-2 border-l border-neutral-800/50 lg:pl-3">
+                <div className="text-sm lg:text-[11px] font-black text-white">{Number(p.prix_vente).toFixed(2)}€</div>
+                <div className="text-[8px] lg:text-[7px] font-bold text-neutral-600 uppercase tracking-tighter">Prix</div>
               </div>
             </Link>
           ))}
@@ -155,73 +150,66 @@ export default function ProductListClient({
       ) : (
         <div className="space-y-3 pb-24">
           {hierarchicalProducts.map((cat) => (
-            <div key={cat.name} className="space-y-2">
+            <div key={cat.name} className="space-y-2 lg:space-y-1">
               <button
                 onClick={() => toggleCategory(cat.name)}
-                className={`w-full flex items-center justify-between p-5 rounded-2xl border transition-all ${
+                className={`w-full flex items-center justify-between p-5 lg:p-3 rounded-2xl lg:rounded-lg border transition-all ${
                   openCategory === cat.name 
                     ? "bg-neutral-900 border-neutral-700 shadow-lg" 
                     : "bg-neutral-950 border-neutral-900 hover:border-neutral-800"
                 }`}
               >
-                <div className="flex items-center gap-4">
-                  <div className={`w-2 h-8 rounded-full transition-all ${openCategory === cat.name ? "bg-red-600 shadow-[0_0_10px_rgba(220,38,38,0.5)]" : "bg-neutral-800"}`} />
+                <div className="flex items-center gap-4 lg:gap-2">
+                  <div className={`w-2 lg:w-0.5 h-8 lg:h-5 rounded-full transition-all ${openCategory === cat.name ? "bg-red-600 shadow-[0_0_10px_rgba(220,38,38,0.5)]" : "bg-neutral-800"}`} />
                   <div className="text-left">
-                    <h3 className={`font-black text-sm uppercase tracking-widest ${openCategory === cat.name ? "text-white" : "text-neutral-500"}`}>
+                    <h3 className={`font-black text-sm lg:text-[10px] uppercase tracking-widest lg:tracking-[0.15em] ${openCategory === cat.name ? "text-white" : "text-neutral-500"}`}>
                       {cat.name}
                     </h3>
-                    <span className="text-[10px] font-bold text-neutral-600 font-mono">{cat.count} PRODUITS</span>
+                    <span className="text-[10px] lg:text-[8px] font-bold text-neutral-700 font-mono">{cat.count} PRODUITS</span>
                   </div>
                 </div>
-                <ChevronRight className={`w-5 h-5 text-neutral-700 transition-transform duration-300 ${openCategory === cat.name ? "rotate-90 text-red-600" : ""}`} />
+                <ChevronRight className={`w-5 h-5 lg:w-3.5 lg:h-3.5 text-neutral-700 transition-transform duration-300 ${openCategory === cat.name ? "rotate-90 text-red-600" : ""}`} />
               </button>
 
               {openCategory === cat.name && (
-                <div className="mt-3 ml-4 pl-4 border-l-2 border-neutral-900 space-y-2 animate-in slide-in-from-top-2 duration-300">
+                <div className="mt-3 lg:mt-1 ml-4 lg:ml-2 pl-4 lg:pl-2 border-l-2 lg:border-l border-neutral-900 space-y-2 lg:space-y-0.5 animate-in slide-in-from-top-2 duration-300">
                   {cat.brands.map((brand) => (
                     <div key={brand.name}>
                       <button
                         onClick={() => toggleBrand(brand.name)}
-                        className={`w-full flex items-center justify-between p-4 rounded-xl border transition-all ${
+                        className={`w-full flex items-center justify-between p-4 lg:p-2 rounded-xl lg:rounded-md border transition-all ${
                           openBrand === brand.name 
                             ? "bg-neutral-900 border-neutral-800" 
                             : "bg-black border-transparent hover:bg-neutral-900/40"
                         }`}
                       >
-                        <div className="flex items-center gap-3">
-                          <div className={`w-1.5 h-1.5 rounded-full ${openBrand === brand.name ? "bg-red-600" : "bg-neutral-700"}`} />
-                          <span className={`text-xs font-bold uppercase tracking-wider ${openBrand === brand.name ? "text-white" : "text-neutral-500"}`}>
+                        <div className="flex items-center gap-3 lg:gap-2">
+                          <div className={`w-1.5 h-1.5 lg:w-1 lg:h-1 rounded-full ${openBrand === brand.name ? "bg-red-600" : "bg-neutral-700"}`} />
+                          <span className={`text-xs lg:text-[10px] font-bold uppercase tracking-wider ${openBrand === brand.name ? "text-white" : "text-neutral-500"}`}>
                             {brand.name}
                           </span>
-                          <span className="text-[9px] font-mono text-neutral-700">({brand.count})</span>
+                          <span className="text-[9px] lg:text-[8px] font-mono text-neutral-800">({brand.count})</span>
                         </div>
-                        <ChevronRight className={`w-4 h-4 text-neutral-800 transition-transform ${openBrand === brand.name ? "rotate-90 text-red-600" : ""}`} />
+                        <ChevronRight className={`w-4 h-4 lg:w-3 lg:h-3 text-neutral-800 transition-transform ${openBrand === brand.name ? "rotate-90 text-red-600" : ""}`} />
                       </button>
 
                       {openBrand === brand.name && (
-                        <div className="mt-2 space-y-2 animate-in slide-in-from-top-1 duration-200">
+                        <div className="mt-2 lg:mt-1 grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-2 lg:gap-1.5 animate-in slide-in-from-top-1 duration-200">
                           {brand.products.map((p) => (
                             <Link 
                               key={p.numero_ean} 
                               href={`/produit/${p.numero_ean}`}
-                              className="flex items-center justify-between p-4 bg-neutral-900/40 border border-neutral-800/50 rounded-xl hover:bg-neutral-800 transition-all group"
+                              className="flex items-center justify-between p-4 lg:p-2 lg:py-1 bg-neutral-900/40 border border-neutral-800/50 rounded-xl lg:rounded-md hover:bg-neutral-800 transition-all group"
                             >
-                              <div className="min-w-0 pr-4">
-                                <div className="flex items-center gap-2 mb-0.5">
-                                  {p.rayon && (
-                                    <span className="text-[9px] font-black text-neutral-500 uppercase tracking-tighter bg-neutral-800 px-1.5 py-0.5 rounded">
-                                      {p.rayon}
-                                    </span>
-                                  )}
-                                </div>
-                                <h4 className="text-[13px] font-medium text-neutral-300 line-clamp-1 group-hover:text-white">
+                              <div className="min-w-0 pr-4 lg:pr-2">
+                                <h4 className="text-[13px] lg:text-[10px] font-medium text-neutral-400 line-clamp-1 group-hover:text-white leading-tight">
                                   {p.description_produit}
                                 </h4>
-                                <p className="text-[9px] font-mono text-neutral-600 mt-0.5 tracking-tighter">EAN: {p.numero_ean}</p>
+                                <p className="text-[9px] lg:text-[7px] font-mono text-neutral-700 mt-0 tracking-tighter">EAN: {p.numero_ean}</p>
                               </div>
-                              <div className="flex items-center gap-2">
-                                <span className="text-sm font-black text-white">{Number(p.prix_vente).toFixed(2)}€</span>
-                                <ArrowRight className="w-4 h-4 text-neutral-700 group-hover:text-red-600" />
+                              <div className="flex items-center gap-2 lg:gap-1.5 shrink-0 pl-2 lg:border-l lg:border-neutral-800/30">
+                                <span className="text-sm lg:text-[10px] font-black text-white">{Number(p.prix_vente).toFixed(2)}€</span>
+                                <ArrowRight className="w-4 h-4 lg:w-3 lg:h-3 text-neutral-800 group-hover:text-red-600" />
                               </div>
                             </Link>
                           ))}

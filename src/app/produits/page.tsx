@@ -1,66 +1,96 @@
+"use client";
+
+import { useState } from "react";
 import { supabase } from "@/lib/supabase";
-import { Package, ArrowRight, ChevronLeft } from "lucide-react";
+import { Package, ArrowRight, Plus, Search } from "lucide-react";
 import Link from "next/link";
+import CreateProductModal from "@/components/CreateProductModal";
 
-export const dynamic = "force-dynamic";
-export const fetchCache = "force-no-store";
+export default function ProduitsPage() {
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [rayons, setRayons] = useState<{name: string, slug: string}[]>([]);
+  const [loading, setLoading] = useState(true);
 
-export default async function ProduitsPage() {
-  // Récupérer les rayons uniques
-  const { data: rayons, error } = await supabase
-    .from("produits")
-    .select("rayon")
-    .not("rayon", "is", null)
-    .order("rayon", { ascending: true });
-
-  if (error) {
-    console.error(error);
-  }
-
-  // Extraire les rayons uniques
-  const uniqueRayons = Array.from(new Set(rayons?.map(r => r.rayon) || [])).map(name => ({
-    name,
-    slug: encodeURIComponent(name!.toLowerCase().replace(/\s+/g, '-'))
-  }));
+  // Fetch unique rayons on client side since we need state for the modal
+  useState(() => {
+    const fetchRayons = async () => {
+      const { data } = await supabase
+        .from("produits")
+        .select("rayon")
+        .not("rayon", "is", null)
+        .order("rayon", { ascending: true });
+      
+      if (data) {
+        const unique = Array.from(new Set(data.map(r => r.rayon))).map(name => ({
+          name: name as string,
+          slug: encodeURIComponent(name!.toLowerCase().replace(/\s+/g, '-'))
+        }));
+        setRayons(unique);
+      }
+      setLoading(false);
+    };
+    fetchRayons();
+  });
 
   return (
-    <main className="min-h-full bg-[#0a0a0c] p-4 sm:p-6 pt-12 pb-24 space-y-8 animate-in fade-in">
-      <div className="flex flex-col gap-2">
-        <h1 className="text-3xl font-black text-white leading-tight tracking-tighter">Catalogue</h1>
-        <p className="text-xs text-neutral-500 font-medium uppercase tracking-widest">Sélectionnez un univers</p>
+    <main className="min-h-full bg-[#0a0a0c] p-4 sm:p-6 lg:p-12 pt-12 pb-24 space-y-10 animate-in fade-in">
+      <div className="flex items-center justify-between">
+        <div className="flex flex-col gap-2">
+          <h1 className="text-4xl font-black text-white leading-tight tracking-tighter">Catalogue</h1>
+          <p className="text-sm text-neutral-500 font-medium uppercase tracking-widest">Gérez vos univers produits</p>
+        </div>
+
+        {/* Action Desktop uniquement */}
+        <button 
+          onClick={() => setShowCreateModal(true)}
+          className="hidden lg:flex items-center gap-3 bg-red-600 hover:bg-red-500 text-white px-6 py-4 rounded-2xl font-black transition-all shadow-lg shadow-red-600/20 active:scale-95"
+        >
+          <Plus className="w-5 h-5" />
+          NOUVEAU PRODUIT
+        </button>
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
-        {uniqueRayons.map((rayon) => (
+      <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4 lg:gap-3">
+        {rayons.map((rayon) => (
           <Link 
             key={rayon.name}
             href={`/rayon/${rayon.slug}`}
-            className="group relative aspect-square bg-neutral-900 border border-neutral-800 rounded-3xl p-6 flex flex-col justify-end overflow-hidden hover:border-red-600/50 transition-all active:scale-[0.98] shadow-xl"
+            className="group relative aspect-square lg:aspect-auto lg:h-32 bg-neutral-900 border border-neutral-800 rounded-3xl lg:rounded-2xl p-6 lg:p-4 flex flex-col justify-end overflow-hidden hover:border-red-600/50 transition-all active:scale-[0.98] shadow-xl"
           >
             {/* Décoration de fond */}
-            <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
-              <Package className="w-16 h-16 text-white" />
+            <div className="absolute top-0 right-0 p-4 lg:p-3 opacity-5 group-hover:opacity-10 transition-opacity">
+              <Package className="w-16 h-16 lg:w-10 lg:h-10 text-white" />
             </div>
             
             <div className="relative z-10">
-              <div className="w-8 h-1 rounded-full bg-red-600 mb-3 group-hover:w-12 transition-all" />
-              <h2 className="text-base font-black text-white leading-tight uppercase">
+              <div className="w-8 h-1 lg:h-0.5 rounded-full bg-red-600 mb-3 lg:mb-2 group-hover:w-12 transition-all" />
+              <h2 className="text-base lg:text-xs font-black text-white leading-tight uppercase tracking-tight line-clamp-2">
                 {rayon.name}
               </h2>
-              <div className="flex items-center gap-1 mt-2 text-[9px] font-bold text-neutral-500 group-hover:text-red-500 transition-colors uppercase tracking-widest">
-                Découvrir <ArrowRight className="w-3 h-3" />
+              <div className="flex items-center gap-1 mt-2 lg:mt-1 text-[9px] lg:text-[7px] font-bold text-neutral-500 group-hover:text-red-500 transition-colors uppercase tracking-widest">
+                Explorer <ArrowRight className="w-3 h-3 lg:w-2 lg:h-2" />
               </div>
             </div>
           </Link>
         ))}
       </div>
 
-      {uniqueRayons.length === 0 && (
+      {rayons.length === 0 && !loading && (
         <div className="text-center py-20 text-neutral-600">
           <Package className="w-12 h-12 mx-auto mb-4 opacity-10" />
           <p className="text-sm font-bold uppercase tracking-widest opacity-30">Aucun rayon trouvé</p>
         </div>
       )}
+
+      {/* Modal de création Desktop */}
+      <CreateProductModal 
+        isOpen={showCreateModal}
+        onClose={() => setShowCreateModal(false)}
+        onSuccess={() => {
+          // Recharger les rayons si besoin, ou juste laisser router.refresh() faire son travail
+          setShowCreateModal(false);
+        }}
+      />
     </main>
   );
 }

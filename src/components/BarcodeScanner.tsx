@@ -38,8 +38,34 @@ export default function BarcodeScanner({ onClose }: { onClose: () => void }) {
   
   const [rayons, setRayons] = useState<string[]>([]);
   const scannerRef = useRef<Html5QrcodeScanner | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const barcodeBuffer = useRef<string>("");
+  const lastKeyTime = useRef<number>(0);
 
   useEffect(() => {
+    // Support Douchette USB (Lecture clavier rapide)
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (mode !== "scan") return;
+      
+      const currentTime = Date.now();
+      if (currentTime - lastKeyTime.current > 50) {
+        barcodeBuffer.current = ""; // Reset si trop lent
+      }
+      
+      if (e.key === "Enter") {
+        if (barcodeBuffer.current.length >= 8) {
+          handleScanSuccess(barcodeBuffer.current);
+          barcodeBuffer.current = "";
+        }
+      } else if (/^\d$/.test(e.key)) {
+        barcodeBuffer.current += e.key;
+      }
+      
+      lastKeyTime.current = currentTime;
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    
     // Récupérer les rayons pour le formulaire
     const fetchRayons = async () => {
       const { data } = await supabase.from("produits").select("rayon").not("rayon", "is", null);
@@ -51,15 +77,18 @@ export default function BarcodeScanner({ onClose }: { onClose: () => void }) {
     // Init scanner
     const timeout = setTimeout(() => {
       initScanner();
+      // Focus auto sur desktop pour douchette
+      if (window.innerWidth > 1024) inputRef.current?.focus();
     }, 300);
 
     return () => {
       clearTimeout(timeout);
+      window.removeEventListener("keydown", handleKeyDown);
       if (scannerRef.current) {
         scannerRef.current.clear().catch(console.error);
       }
     };
-  }, []);
+  }, [mode]);
 
   const initScanner = () => {
     try {
@@ -158,12 +187,12 @@ export default function BarcodeScanner({ onClose }: { onClose: () => void }) {
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="fixed inset-0 z-[100] bg-black/95 flex flex-col items-center justify-start sm:justify-center p-0 sm:p-4 backdrop-blur-md overflow-y-auto"
+      className="fixed inset-0 z-[100] bg-black/95 flex flex-col items-center justify-start sm:justify-center p-0 sm:p-8 backdrop-blur-md overflow-y-auto"
     >
       <motion.div 
         initial={{ y: 50, scale: 0.95 }}
         animate={{ y: 0, scale: 1 }}
-        className="w-full max-w-xl bg-neutral-950/50 sm:rounded-[2.5rem] border-x sm:border border-neutral-800 shadow-2xl relative min-h-screen sm:min-h-0"
+        className="w-full max-w-xl lg:max-w-4xl bg-neutral-950 sm:rounded-[3rem] border-x sm:border border-neutral-800 shadow-[0_0_100px_rgba(0,0,0,0.8)] relative min-h-screen sm:min-h-0"
       >
         {/* Header */}
         <div className="flex justify-between items-center p-6 border-b border-neutral-900 sticky top-0 bg-neutral-950/80 backdrop-blur-md z-20">
@@ -254,6 +283,7 @@ export default function BarcodeScanner({ onClose }: { onClose: () => void }) {
                     <label className="text-[10px] font-black text-neutral-600 uppercase tracking-widest mb-3 block px-1">Saisie Manuelle</label>
                     <div className="relative">
                       <input 
+                        ref={inputRef}
                         type="text" 
                         placeholder="Entrez un EAN manuellement..."
                         onKeyDown={(e) => {
