@@ -8,13 +8,10 @@ import {
   CheckCircle2, 
   AlertCircle, 
   ArrowRight, 
-  FileText, 
   Loader2, 
-  History,
   Info,
-  ChevronDown,
   Layers,
-  Search
+  ChevronRight
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
