@@ -16,8 +16,14 @@ import BottomNav from "@/components/BottomNav";
 import ToastContainer from "@/components/Toast";
 
 export const metadata: Metadata = {
-  title: "Vigiprix : Scan & Comparaison",
+  title: "VigiPrix : Veille Terrain",
   description: "Application mobile de veille tarifaire et comparaison de prix.",
+  manifest: "/manifest.json",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "VigiPrix",
+  },
 };
 
 export const viewport = {

@@ -71,3 +71,31 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }
+
+/**
+ * DELETE /api/releves?id=...
+ * Supprime un relevé de prix spécifique.
+ */
+export async function DELETE(request: NextRequest) {
+  const { searchParams } = new URL(request.url);
+  const id = searchParams.get("id");
+
+  if (!id) {
+    return NextResponse.json({ error: "ID manquant" }, { status: 400 });
+  }
+
+  try {
+    const { error } = await supabase
+      .from("releves_prix")
+      .delete()
+      .eq("id", id);
+
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    return NextResponse.json({ success: true });
+  } catch (err: any) {
+    return NextResponse.json({ error: err.message }, { status: 500 });
+  }
+}

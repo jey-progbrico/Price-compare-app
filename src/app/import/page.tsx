@@ -17,10 +17,27 @@ function ImportForm() {
   useEffect(() => {
     const urlParam = searchParams.get("url");
     const titleParam = searchParams.get("title");
+    const textParam = searchParams.get("text");
     const eanParam = searchParams.get("ean");
     
-    if (urlParam) setUrl(urlParam);
-    if (titleParam) setTitle(titleParam);
+    let detectedUrl = urlParam || "";
+    let detectedTitle = titleParam || "";
+
+    // Share Target Mobile : Chrome envoie souvent l'URL dans "text" ou concatène titre + URL dans "text"
+    if (textParam && !detectedUrl) {
+      const urlRegex = /(https?:\/\/[^\s]+)/g;
+      const foundUrl = textParam.match(urlRegex);
+      if (foundUrl) {
+        detectedUrl = foundUrl[0];
+        // Si le texte contient autre chose que l'URL, on l'utilise comme titre potentiel
+        if (!detectedTitle) {
+          detectedTitle = textParam.replace(detectedUrl, "").trim();
+        }
+      }
+    }
+
+    if (detectedUrl) setUrl(detectedUrl);
+    if (detectedTitle) setTitle(detectedTitle);
     
     // Restaurer l'EAN : priorité à l'URL, puis au localStorage (EAN courant)
     if (eanParam) {
@@ -182,8 +199,21 @@ function ImportForm() {
             </button>
           </div>
 
+          <div className="space-y-3 p-4 bg-emerald-950/10 border border-emerald-900/20 rounded-xl">
+            <h3 className="text-emerald-400 font-bold">Nouveau : Partage Mobile (PWA)</h3>
+            <p className="text-neutral-500">
+              Sur Android ou iPhone, vous pouvez utiliser le bouton <span className="text-white">Partager</span> de votre navigateur :
+            </p>
+            <ol className="list-decimal list-inside space-y-2 text-neutral-500">
+              <li>Installez VigiPrix sur votre écran d'accueil (Menu Chrome {`>`} Installer l'app).</li>
+              <li>Sur un site concurrent, cliquez sur <span className="text-white">Partager</span>.</li>
+              <li>Choisissez <span className="text-white">VigiPrix</span> dans la liste.</li>
+              <li>Le lien s'importe automatiquement !</li>
+            </ol>
+          </div>
+
           <div className="space-y-3 p-4 bg-blue-950/10 border border-blue-900/20 rounded-xl">
-            <h3 className="text-blue-400 font-bold">Méthode manuelle (Mobile & PC) :</h3>
+            <h3 className="text-blue-400 font-bold">Méthode Bookmarklet (PC) :</h3>
             <ol className="list-decimal list-inside space-y-2 text-neutral-500">
               <li>Copiez le code bleu ci-dessus.</li>
               <li>Créez un nouveau favori (n'importe quelle page).</li>

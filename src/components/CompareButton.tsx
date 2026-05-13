@@ -18,6 +18,7 @@ import {
   Tag,
   Link2,
   PenLine,
+  Trash2,
 } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -159,11 +160,13 @@ function PriceDisplay({ prix, prix_precedent, internalPrice }: {
 
 // ─── Carte de veille manuelle (Remplace LinkOnlyCard et PriceResultCard) ──────
 
-function ManualVeilleCard({ res, index, ean, internalPrice }: {
+function ManualVeilleCard({ res, index, ean, internalPrice, releveId, onDelete }: {
   res: SearchResult;
   index: number;
   ean: string;
   internalPrice?: number | null;
+  releveId?: string;
+  onDelete?: (id: string) => void;
 }) {
   // Initialiser avec le prix existant si présent (conversion string pour l'input)
   const [prix, setPrix] = useState<string>(res.prix ? res.prix.toString() : "");
@@ -259,15 +262,31 @@ function ManualVeilleCard({ res, index, ean, internalPrice }: {
             {res.titre || "Produit"}
           </p>
         </div>
-        <a
-          href={res.lien}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="p-2 bg-neutral-900 border border-neutral-800 rounded-xl text-neutral-500
-                     hover:text-white hover:border-neutral-700 transition-all flex-shrink-0"
-        >
-          <ExternalLink className="w-4 h-4" />
-        </a>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <a
+            href={res.lien}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="p-2 bg-neutral-900 border border-neutral-800 rounded-xl text-neutral-500
+                       hover:text-white hover:border-neutral-700 transition-all"
+          >
+            <ExternalLink className="w-4 h-4" />
+          </a>
+
+          {releveId && onDelete && (
+            <button
+              onClick={() => {
+                if (confirm("Supprimer ce relevé ?")) {
+                  onDelete(releveId);
+                }
+              }}
+              className="p-2 bg-red-900/10 border border-red-900/20 rounded-xl text-red-500/60
+                         hover:text-red-500 hover:bg-red-900/20 transition-all"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Zone d'action : Saisie du prix */}
@@ -364,6 +383,17 @@ export default function CompareButton({
 
   const searchDesignation = `${produit?.description_produit || ""} ${produit?.marque || ""}`.trim();
 
+  const handleDeleteReleve = async (id: string) => {
+    try {
+      const res = await fetch(`/api/releves?id=${id}`, { method: "DELETE" });
+      if (res.ok) {
+        setReleves(prev => prev.filter(r => r.id !== id));
+      }
+    } catch (err) {
+      console.error("Erreur suppression relevé:", err);
+    }
+  };
+
   return (
     <div className="w-full space-y-6">
 
@@ -418,6 +448,8 @@ export default function CompareButton({
                 index={i}
                 ean={ean}
                 internalPrice={internalPrice}
+                releveId={rel.id}
+                onDelete={handleDeleteReleve}
               />
             ))}
           </div>

@@ -55,15 +55,15 @@ export default function ParametresPage() {
         </div>
       </div>
 
-      {/* 1. SECTION IMPORT RAPIDE */}
+      {/* 1. SECTION IMPORT RAPIDE PC */}
       <section className="space-y-3">
         <div className="flex items-center gap-2 px-1">
           <Zap className="w-4 h-4 text-yellow-500" />
-          <h2 className="text-xs font-black text-neutral-400 uppercase tracking-widest">Import Rapide</h2>
+          <h2 className="text-xs font-black text-neutral-400 uppercase tracking-widest">Import PC (Bookmarklet)</h2>
         </div>
         <div className="bg-neutral-900 border border-neutral-800 rounded-3xl p-5 space-y-4 shadow-xl">
           <p className="text-[11px] text-neutral-400 leading-relaxed">
-            Utilisez le bookmarklet pour importer n'importe quelle page produit concurrente d'un seul clic vers VigiPrix.
+            Utilisez le bookmarklet pour importer n'importe quelle page produit concurrente d'un seul clic vers VigiPrix depuis votre ordinateur.
           </p>
           <button 
             onClick={copyBookmarklet}
@@ -75,6 +75,44 @@ export default function ParametresPage() {
           <p className="text-[9px] text-neutral-600 text-center italic">
             Collez ce code dans l'adresse d'un favori nommé "VigiPrix Import".
           </p>
+        </div>
+      </section>
+
+      {/* 1bis. SECTION IMPORT MOBILE */}
+      <section className="space-y-3">
+        <div className="flex items-center gap-2 px-1">
+          <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+          <h2 className="text-xs font-black text-neutral-400 uppercase tracking-widest">Import Mobile (Partage)</h2>
+        </div>
+        <div className="bg-emerald-950/10 border border-emerald-900/20 rounded-3xl p-5 space-y-5 shadow-xl relative overflow-hidden">
+          <div className="absolute top-0 right-0 p-4 opacity-5">
+             <Zap className="w-16 h-16 text-emerald-500" />
+          </div>
+
+          <div className="space-y-4 relative z-10">
+            <div className="flex gap-4">
+              <div className="w-6 h-6 rounded-lg bg-emerald-600 flex items-center justify-center text-[10px] font-black text-white shrink-0">1</div>
+              <p className="text-xs text-neutral-300 leading-tight">Ouvrez une fiche concurrente (Chrome/Safari)</p>
+            </div>
+            <div className="flex gap-4">
+              <div className="w-6 h-6 rounded-lg bg-emerald-600 flex items-center justify-center text-[10px] font-black text-white shrink-0">2</div>
+              <p className="text-xs text-neutral-300 leading-tight">Cliquez sur <span className="font-black text-white uppercase px-1">Partager</span> dans votre navigateur</p>
+            </div>
+            <div className="flex gap-4">
+              <div className="w-6 h-6 rounded-lg bg-emerald-600 flex items-center justify-center text-[10px] font-black text-white shrink-0">3</div>
+              <p className="text-xs text-neutral-300 leading-tight">Choisissez <span className="font-black text-white uppercase px-1">VigiPrix</span> dans la liste des apps</p>
+            </div>
+            <div className="flex gap-4">
+              <div className="w-6 h-6 rounded-lg bg-emerald-600 flex items-center justify-center text-[10px] font-black text-white shrink-0">4</div>
+              <p className="text-xs text-neutral-300 leading-tight italic opacity-60">L'import se pré-remplit automatiquement !</p>
+            </div>
+          </div>
+
+          <div className="pt-2">
+            <p className="text-[9px] text-emerald-500 font-bold uppercase tracking-widest text-center">
+              Recommandé pour le terrain
+            </p>
+          </div>
         </div>
       </section>
 
@@ -186,7 +224,7 @@ export default function ParametresPage() {
       <div className="pt-4 text-center">
         <div className="flex items-center justify-center gap-1.5 text-[10px] font-bold text-neutral-700 uppercase tracking-widest">
           <Shield className="w-3 h-3" />
-          Vigiprix System v7.2 — Stable
+          Vigiprix System v7.6 — Stable
         </div>
       </div>
     </main>
