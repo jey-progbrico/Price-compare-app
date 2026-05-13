@@ -63,7 +63,7 @@ export async function GET(request: Request) {
 
     // 4. Génération du fichier Excel
     const wb = XLSX.utils.book_new();
-    const ws = XLSX.utils.json_to_sheet(enrichedData as any[]);
+    const ws = XLSX.utils.json_to_sheet(excelData as any[]);
 
     // Style minimal : Largeur colonnes auto
     const colWidths = [
