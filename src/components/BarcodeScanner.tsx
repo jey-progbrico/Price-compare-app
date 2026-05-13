@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
-import { Html5QrcodeScanner, Html5Qrcode } from "html5-qrcode";
+import { Html5Qrcode } from "html5-qrcode";
 import { 
   X, 
   Camera, 
@@ -15,8 +15,7 @@ import {
   Package,
   Tag,
   Layers,
-  Save,
-  ChevronRight
+  Save
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
@@ -26,7 +25,7 @@ export default function BarcodeScanner({ onClose }: { onClose: () => void }) {
   const router = useRouter();
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const [mode, setMode] = useState<"scan" | "create" | "searching">("scan");
+  const [mode, setMode] = useState<"scan" | "create">("scan");
   const [ean, setEan] = useState("");
   const [formData, setFormData] = useState({
     description_produit: "",
@@ -299,7 +298,7 @@ export default function BarcodeScanner({ onClose }: { onClose: () => void }) {
                       </div>
                     )}
 
-                    {(loading || (isCameraActive && mode === 'searching')) && (
+                    {loading && (
                       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-20">
                         <div className="text-center space-y-4">
                           <Loader2 className="w-10 h-10 animate-spin text-red-500 mx-auto" />
@@ -516,8 +515,6 @@ export default function BarcodeScanner({ onClose }: { onClose: () => void }) {
 
       {/* Global Style pour injecter les styles html5-qrcode */}
       <style dangerouslySetInnerHTML={{__html: `
-        #reader__dashboard_section_csr { display: none !important; }
-        #reader__camera_selection { display: none !important; }
         #reader video { 
           object-fit: cover !important; 
           width: 100% !important; 
@@ -525,9 +522,6 @@ export default function BarcodeScanner({ onClose }: { onClose: () => void }) {
           border-radius: 1.5rem !important;
         }
         #reader { border: none !important; }
-        #reader img { display: none !important; }
-        #reader__status_span { display: none !important; }
-        #reader__header_message { display: none !important; }
       `}} />
     </motion.div>
   );
