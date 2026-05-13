@@ -37,7 +37,8 @@ export default function BarcodeScanner({ onClose }: { onClose: () => void }) {
   });
   
   const [rayons, setRayons] = useState<string[]>([]);
-  const scannerRef = useRef<Html5QrcodeScanner | null>(null);
+  const qrCodeInstanceRef = useRef<Html5Qrcode | null>(null);
+  const [isCameraActive, setIsCameraActive] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const barcodeBuffer = useRef<string>("");
   const lastKeyTime = useRef<number>(0);
@@ -68,48 +69,86 @@ export default function BarcodeScanner({ onClose }: { onClose: () => void }) {
     
     // Récupérer les rayons pour le formulaire
     const fetchRayons = async () => {
-      const { data } = await supabase.from("produits").select("rayon").not("rayon", "is", null);
-      const unique = Array.from(new Set(data?.map(r => r.rayon) || []));
-      setRayons(unique as string[]);
+      try {
+        const { data } = await supabase.from("produits").select("rayon").not("rayon", "is", null);
+        const unique = Array.from(new Set(data?.map(r => r.rayon) || []));
+        setRayons(unique as string[]);
+      } catch (err) {
+        console.error("Error fetching rayons:", err);
+      }
     };
     fetchRayons();
 
-    // Init scanner
-    const timeout = setTimeout(() => {
-      initScanner();
-      // Focus auto sur desktop pour douchette
-      if (window.innerWidth > 1024) inputRef.current?.focus();
-    }, 300);
+    // Focus auto sur desktop pour douchette
+    if (mode === "scan" && window.innerWidth > 1024) {
+      setTimeout(() => inputRef.current?.focus(), 500);
+    }
 
     return () => {
-      clearTimeout(timeout);
       window.removeEventListener("keydown", handleKeyDown);
-      if (scannerRef.current) {
-        scannerRef.current.clear().catch(console.error);
-      }
+      stopCamera();
     };
   }, [mode]);
 
-  const initScanner = () => {
-    try {
-      const scanner = new Html5QrcodeScanner(
-        "reader",
-        { 
-          fps: 15, 
-          qrbox: { width: 280, height: 180 }, 
-          formatsToSupport: [8, 1, 0, 14], // EAN_13, EAN_8, CODE_128, etc.
-          aspectRatio: 1.0
-        }, 
-        false
-      );
+  const startCamera = async () => {
+    setError("");
+    setLoading(true);
+    
+    // S'assurer que l'élément est prêt
+    const readerElement = document.getElementById("reader");
+    if (!readerElement) {
+      setError("Erreur interne : Zone de rendu absente.");
+      setLoading(false);
+      return;
+    }
 
-      scanner.render(
+    try {
+      // Création instance si nécessaire
+      if (!qrCodeInstanceRef.current) {
+        qrCodeInstanceRef.current = new Html5Qrcode("reader");
+      }
+
+      const config = { 
+        fps: 20, 
+        qrbox: { width: 280, height: 180 },
+        aspectRatio: 1.0
+      };
+
+      await qrCodeInstanceRef.current.start(
+        { facingMode: "environment" }, 
+        config, 
         (decodedText) => handleScanSuccess(decodedText),
-        (err) => {}
+        () => {} // Ignorer les erreurs de frame non reconnue
       );
-      scannerRef.current = scanner;
-    } catch (err) {
-      setError("Caméra inaccessible. Vérifiez les permissions.");
+      
+      setIsCameraActive(true);
+      console.log("🟢 Caméra démarrée");
+    } catch (err: any) {
+      console.error("🔴 Erreur démarrage caméra:", err);
+      
+      if (err.includes("NotAllowedError") || err.includes("Permission denied")) {
+        setError("Accès caméra refusé. Veuillez l'autoriser dans vos réglages.");
+      } else if (err.includes("NotFoundError")) {
+        setError("Aucune caméra détectée sur votre appareil.");
+      } else if (err.includes("NotReadableError")) {
+        setError("Caméra déjà utilisée par une autre application.");
+      } else {
+        setError("Erreur caméra : Impossible d'ouvrir le flux vidéo.");
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const stopCamera = async () => {
+    if (qrCodeInstanceRef.current && qrCodeInstanceRef.current.isScanning) {
+      try {
+        await qrCodeInstanceRef.current.stop();
+        setIsCameraActive(false);
+        console.log("🔴 Caméra arrêtée");
+      } catch (err) {
+        console.error("Erreur arrêt caméra:", err);
+      }
     }
   };
 
@@ -131,14 +170,17 @@ export default function BarcodeScanner({ onClose }: { onClose: () => void }) {
 
       if (produit) {
         // Succès : Redirection
+        await stopCamera();
         router.push(`/produit/${decodedText}`);
         onClose();
       } else {
         // Inconnu : Mode création
-        if (scannerRef.current) await scannerRef.current.clear();
+        await stopCamera();
         setMode("create");
       }
     } catch (err) {
+      // Erreur de fetch ou produit absent
+      await stopCamera();
       setMode("create");
     } finally {
       setLoading(false);
@@ -228,70 +270,108 @@ export default function BarcodeScanner({ onClose }: { onClose: () => void }) {
                 className="space-y-8"
               >
                 {/* Scanner Zone */}
-                <div className="relative group">
+                <div className="relative group max-w-sm mx-auto w-full">
                   {/* Cadre Stylisé */}
-                  <div className="absolute -inset-2 border-2 border-red-600/20 rounded-[2rem] pointer-events-none group-hover:border-red-600/40 transition-colors" />
+                  <div className={`absolute -inset-2 border-2 rounded-[2rem] pointer-events-none transition-colors ${isCameraActive ? 'border-red-600/40' : 'border-neutral-800'}`} />
                   
                   {/* Coins Visuels */}
-                  <div className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-red-600 rounded-tl-2xl z-10" />
-                  <div className="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 border-red-600 rounded-tr-2xl z-10" />
-                  <div className="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 border-red-600 rounded-bl-2xl z-10" />
-                  <div className="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-red-600 rounded-br-2xl z-10" />
+                  <div className={`absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 rounded-tl-2xl z-10 transition-colors ${isCameraActive ? 'border-red-600' : 'border-neutral-800'}`} />
+                  <div className={`absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 rounded-tr-2xl z-10 transition-colors ${isCameraActive ? 'border-red-600' : 'border-neutral-800'}`} />
+                  <div className={`absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 rounded-bl-2xl z-10 transition-colors ${isCameraActive ? 'border-red-600' : 'border-neutral-800'}`} />
+                  <div className={`absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 rounded-br-2xl z-10 transition-colors ${isCameraActive ? 'border-red-600' : 'border-neutral-800'}`} />
                   
                   {/* Ligne de scan animée */}
-                  <motion.div 
-                    animate={{ y: [0, 200, 0] }}
-                    transition={{ duration: 2.5, repeat: Infinity, ease: "linear" }}
-                    className="absolute inset-x-4 top-0 h-0.5 bg-gradient-to-r from-transparent via-red-500 to-transparent z-10 opacity-50 shadow-[0_0_10px_rgba(239,68,68,0.5)]"
-                  />
+                  {isCameraActive && (
+                    <motion.div 
+                      animate={{ y: [0, 200, 0] }}
+                      transition={{ duration: 2.5, repeat: Infinity, ease: "linear" }}
+                      className="absolute inset-x-4 top-0 h-0.5 bg-gradient-to-r from-transparent via-red-500 to-transparent z-10 opacity-50 shadow-[0_0_10px_rgba(239,68,68,0.5)]"
+                    />
+                  )}
 
-                  <div id="reader" className="w-full aspect-[4/3] bg-black rounded-[1.5rem] overflow-hidden border border-neutral-900 shadow-inner">
-                    {/* HTML5 QR Code injectera ici */}
+                  <div className="relative aspect-square w-full bg-black rounded-[1.5rem] overflow-hidden border border-neutral-900 shadow-inner">
+                    <div id="reader" className="w-full h-full" />
+                    
+                    {!isCameraActive && !loading && (
+                      <div className="absolute inset-0 flex flex-col items-center justify-center space-y-3 opacity-20 pointer-events-none">
+                        <Camera className="w-12 h-12 mx-auto" />
+                        <p className="text-[10px] font-black uppercase tracking-widest">Caméra en attente</p>
+                      </div>
+                    )}
+
+                    {(loading || (isCameraActive && mode === 'searching')) && (
+                      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-20">
+                        <div className="text-center space-y-4">
+                          <Loader2 className="w-10 h-10 animate-spin text-red-500 mx-auto" />
+                          <p className="text-xs font-black text-white uppercase tracking-widest animate-pulse">
+                            {isCameraActive ? 'Analyse en cours...' : 'Initialisation...'}
+                          </p>
+                        </div>
+                      </div>
+                    )}
                   </div>
 
-                  {loading && (
-                    <div className="absolute inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center rounded-[1.5rem] z-20">
-                      <div className="text-center space-y-4">
-                        <Loader2 className="w-10 h-10 animate-spin text-red-500 mx-auto" />
-                        <p className="text-xs font-black text-white uppercase tracking-widest animate-pulse">Vérification...</p>
+                  {error && (
+                    <div className="absolute inset-x-0 -bottom-12 flex justify-center z-30">
+                      <div className="bg-red-500 text-white text-[10px] font-black px-4 py-2 rounded-full shadow-lg animate-bounce flex items-center gap-2">
+                        <AlertCircle className="w-3 h-3" />
+                        {error}
                       </div>
                     </div>
                   )}
                 </div>
 
                 {/* Instructions & Saisie */}
-                <div className="space-y-6">
-                  <div className="text-center">
-                    <p className="text-xs text-neutral-400 leading-relaxed max-w-[250px] mx-auto">
-                      Alignez le code-barres dans le cadre. <br/>Le scan est automatique et instantané.
-                    </p>
-                  </div>
+                <div className="space-y-6 pt-4">
+                  {!isCameraActive && (
+                    <div className="text-center">
+                      <p className="text-[10px] text-neutral-500 font-bold uppercase tracking-widest leading-relaxed max-w-[250px] mx-auto">
+                        Pour scanner, autorisez l'accès à votre caméra arrière.
+                      </p>
+                    </div>
+                  )}
 
-                  <div className="flex flex-col gap-3">
-                    <button className="w-full bg-red-600 hover:bg-red-500 text-white font-black py-4 rounded-2xl transition-all shadow-lg shadow-red-600/20 flex items-center justify-center gap-3 active:scale-[0.98]">
-                      <Camera className="w-5 h-5" />
-                      AUTORISER LA CAMÉRA
-                    </button>
+                  <div className="flex flex-col gap-3 max-w-sm mx-auto w-full">
+                    {!isCameraActive ? (
+                      <button 
+                        onClick={startCamera}
+                        disabled={loading}
+                        className="w-full bg-red-600 hover:bg-red-500 text-white font-black py-4 rounded-2xl transition-all shadow-lg shadow-red-600/20 flex items-center justify-center gap-3 active:scale-[0.98] disabled:opacity-50"
+                      >
+                        <Camera className="w-5 h-5" />
+                        AUTORISER LA CAMÉRA
+                      </button>
+                    ) : (
+                      <div className="bg-green-500/10 border border-green-500/20 rounded-2xl py-4 flex items-center justify-center gap-3">
+                        <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+                        <span className="text-xs font-black text-green-500 uppercase tracking-widest">Scanner Actif</span>
+                      </div>
+                    )}
                     
-                    <button className="w-full bg-neutral-900 text-neutral-400 font-bold py-3 text-xs rounded-xl hover:text-white transition-colors flex items-center justify-center gap-2">
+                    <button className="w-full bg-neutral-900 text-neutral-400 font-bold py-3 text-[10px] rounded-xl hover:text-white transition-colors flex items-center justify-center gap-2 uppercase tracking-widest">
                       <ImageIcon className="w-4 h-4" />
                       Scanner depuis une image
                     </button>
                   </div>
 
-                  <div className="pt-6 border-t border-neutral-900">
+                  <div className="pt-8 border-t border-neutral-900 max-w-sm mx-auto w-full">
                     <label className="text-[10px] font-black text-neutral-600 uppercase tracking-widest mb-3 block px-1">Saisie Manuelle</label>
                     <div className="relative">
                       <input 
                         ref={inputRef}
                         type="text" 
                         placeholder="Entrez un EAN manuellement..."
+                        value={ean}
+                        onChange={(e) => setEan(e.target.value)}
                         onKeyDown={(e) => {
-                          if (e.key === 'Enter') handleScanSuccess((e.target as HTMLInputElement).value);
+                          if (e.key === 'Enter') handleScanSuccess(ean);
                         }}
                         className="w-full bg-neutral-900/50 border border-neutral-800 rounded-2xl px-5 py-4 text-white font-mono focus:border-red-600 outline-none transition-all placeholder:text-neutral-700"
                       />
-                      <button className="absolute right-3 top-1/2 -translate-y-1/2 p-2 bg-neutral-800 rounded-xl text-neutral-400 hover:text-white">
+                      <button 
+                        onClick={() => handleScanSuccess(ean)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 p-2 bg-neutral-800 rounded-xl text-neutral-400 hover:text-white transition-colors"
+                      >
                         <Search className="w-4 h-4" />
                       </button>
                     </div>
