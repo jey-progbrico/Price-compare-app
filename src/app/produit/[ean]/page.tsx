@@ -23,6 +23,14 @@ export default async function ProductPage({
     .eq("numero_ean", ean)
     .single();
 
+  // Log de la consultation (Async/Non-bloquant)
+  supabase
+    .from("historique_consultations")
+    .insert([{ ean, created_at: new Date().toISOString() }])
+    .then(({ error }) => {
+      if (error) console.error("[LOG ERROR] Erreur tracking consultation:", error);
+    });
+
   if (error && error.code !== "PGRST116") {
     console.error(error);
   }

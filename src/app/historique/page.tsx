@@ -4,25 +4,33 @@ import Link from "next/link";
 
 export const dynamic = "force-dynamic";
 
+import { enrichWithProducts } from "@/lib/data-utils";
+
 async function getActivites() {
-  // 1. Charger les 15 derniers relevés
-  const { data: releves } = await supabase
+  // 1. Charger les 15 derniers relevés (bruts)
+  const { data: rawReleves } = await supabase
     .from("releves_prix")
-    .select("*, produits(description_produit, marque)")
+    .select("*")
     .order("created_at", { ascending: false })
     .limit(15);
 
-  // 2. Charger les 10 derniers produits
-  const { data: produits } = await supabase
-    .from("produits")
+  // 2. Charger les 10 dernières consultations (brutes)
+  const { data: rawConsultations } = await supabase
+    .from("historique_consultations")
     .select("*")
-    .order("updated_at", { ascending: false })
+    .order("created_at", { ascending: false })
     .limit(10);
 
-  // 3. Fusionner et typer
+  // 3. Enrichir les deux listes avec les détails produits via le helper
+  const [releves, consultations] = await Promise.all([
+    enrichWithProducts(rawReleves || []),
+    enrichWithProducts(rawConsultations || [])
+  ]);
+
+  // 4. Fusionner et typer pour l'affichage
   const activites: any[] = [];
 
-  releves?.forEach(r => {
+  releves.forEach(r => {
     activites.push({
       id: `rel-${r.id}`,
       type: "releve",
@@ -30,20 +38,20 @@ async function getActivites() {
       ean: r.ean,
       enseigne: r.enseigne,
       prix: r.prix_constate,
-      titre: r.designation_originale || r.produits?.description_produit || "Produit",
-      marque: r.produits?.marque
+      titre: r.produit?.description_produit || r.designation_originale || "Produit",
+      marque: r.produit?.marque
     });
   });
 
-  produits?.forEach(p => {
+  consultations.forEach(c => {
     activites.push({
-      id: `prod-${p.numero_ean}`,
-      type: "produit",
-      date: new Date(p.updated_at || p.created_at),
-      ean: p.numero_ean,
-      titre: p.description_produit,
-      marque: p.marque,
-      prix: p.prix_vente
+      id: `cons-${c.id}`,
+      type: "consultation",
+      date: new Date(c.created_at),
+      ean: c.ean,
+      titre: c.produit?.description_produit || "Fiche consultée",
+      marque: c.produit?.marque,
+      prix: c.produit?.prix_vente
     });
   });
 
@@ -79,8 +87,8 @@ export default async function HistoriquePage() {
                     Nouveau Relevé
                   </div>
                 ) : (
-                  <div className="px-2 py-0.5 bg-blue-900/30 text-blue-500 text-[10px] font-bold rounded border border-blue-800/50 uppercase tracking-widest">
-                    Fiche Modifiée
+                  <div className="px-2 py-0.5 bg-neutral-800 text-neutral-400 text-[10px] font-bold rounded border border-neutral-700 uppercase tracking-widest">
+                    Consultation
                   </div>
                 )}
                 <span className="text-[10px] text-neutral-600 font-mono">
@@ -94,9 +102,9 @@ export default async function HistoriquePage() {
 
             <div className="flex gap-4">
               <div className={`w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 border ${
-                act.type === "releve" ? "bg-emerald-950/20 border-emerald-900/30 text-emerald-500" : "bg-blue-950/20 border-blue-900/30 text-blue-500"
+                act.type === "releve" ? "bg-emerald-950/20 border-emerald-900/30 text-emerald-500" : "bg-neutral-950 border-neutral-800 text-neutral-600"
               }`}>
-                {act.type === "releve" ? <Tag className="w-6 h-6" /> : <Package className="w-6 h-6" />}
+                {act.type === "releve" ? <Tag className="w-6 h-6" /> : <Clock className="w-6 h-6" />}
               </div>
               
               <div className="flex-1 min-w-0">

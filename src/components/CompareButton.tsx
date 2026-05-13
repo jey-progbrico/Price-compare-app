@@ -200,6 +200,22 @@ function ManualVeilleCard({ res, index, ean, internalPrice, releveId, onDelete }
 
       if (response.ok) {
         console.log(`[RELEVE SAVED] Succès pour ${res.enseigne} (${prix}€)`);
+        
+        // Journaliser l'activité
+        await fetch("/api/activites", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            type_action: releveId ? "modification_releve" : "ajout_releve",
+            ean,
+            details: {
+              enseigne: res.enseigne,
+              prix: parseFloat(prix),
+              designation: res.titre
+            }
+          }),
+        }).catch(err => console.error("Erreur log activite:", err));
+
         setSaved(true);
         setTimeout(() => setSaved(false), 3000);
       }
@@ -387,6 +403,17 @@ export default function CompareButton({
     try {
       const res = await fetch(`/api/releves?id=${id}`, { method: "DELETE" });
       if (res.ok) {
+        // Récupérer le relevé avant de le supprimer pour le log (optionnel, ici on a l'EAN dans les props du parent)
+        await fetch("/api/activites", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            type_action: "suppression_releve",
+            ean,
+            details: { id }
+          }),
+        }).catch(err => console.error("Erreur log activite:", err));
+
         setReleves(prev => prev.filter(r => r.id !== id));
       }
     } catch (err) {

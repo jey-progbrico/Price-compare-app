@@ -13,14 +13,30 @@ import {
   Shield,
   Gauge
 } from "lucide-react";
+import ExportModal from "./ExportModal";
+import { supabase } from "@/lib/supabase";
 
 export default function ParametresPage() {
   const [cacheDuration, setCacheDuration] = useState("7");
   const [priceThreshold, setPriceThreshold] = useState("0.50");
   const [loading, setLoading] = useState(false);
   const [cacheCount, setCacheCount] = useState(0);
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [rayons, setRayons] = useState<string[]>([]);
+  const [relevesCount, setRelevesCount] = useState(0);
 
   useEffect(() => {
+    const fetchStats = async () => {
+      // 1. Nombre de relevés
+      const { count } = await supabase.from("releves_prix").select("*", { count: 'exact', head: true });
+      setRelevesCount(count || 0);
+
+      // 2. Liste des rayons pour les filtres
+      const { data: rayonsData } = await supabase.from("produits").select("rayon").not("rayon", "is", null);
+      const uniqueRayons = Array.from(new Set(rayonsData?.map(r => r.rayon) || []));
+      setRayons(uniqueRayons as string[]);
+    };
+
     const fetchSettings = async () => {
       try {
         const res = await fetch("/api/settings");
@@ -35,8 +51,9 @@ export default function ParametresPage() {
       }
     };
 
+    fetchStats();
     fetchSettings();
-    // Simulation de récupération des stats
+    // Simulation de récupération des stats cache
     setCacheCount(124);
   }, []);
 
@@ -239,21 +256,44 @@ export default function ParametresPage() {
       {/* 4. SECTION DONNÉES */}
       <section className="space-y-3">
         <div className="flex items-center gap-2 px-1">
-          <FileText className="w-4 h-4 text-neutral-500" />
-          <h2 className="text-xs font-black text-neutral-400 uppercase tracking-widest">Données & Export</h2>
+          <FileText className="w-4 h-4 text-emerald-500" />
+          <h2 className="text-xs font-black text-neutral-400 uppercase tracking-widest">Export des relevés</h2>
         </div>
         <div className="bg-neutral-900 border border-neutral-800 rounded-3xl overflow-hidden divide-y divide-neutral-800/50 shadow-xl">
-          <button className="w-full p-5 flex justify-between items-center hover:bg-neutral-800/30 transition-all opacity-40 grayscale cursor-not-allowed">
-            <div className="text-left">
-              <div className="text-sm font-bold text-white">Exporter en CSV</div>
-              <div className="text-[10px] text-neutral-500">Extraire tous les relevés terrain</div>
+          <div className="p-5 flex justify-between items-center bg-emerald-950/5">
+            <div>
+              <div className="text-sm font-bold text-white">Relevés exportables</div>
+              <div className="text-[10px] text-neutral-500 uppercase tracking-tighter">Veille concurrentielle terrain</div>
             </div>
-            <ExternalLink className="w-5 h-5 text-neutral-700" />
+            <div className="text-right">
+              <span className="text-xl font-black text-emerald-500">{relevesCount}</span>
+              <p className="text-[9px] text-neutral-600 font-bold uppercase">Lignes</p>
+            </div>
+          </div>
+
+          <button 
+            onClick={() => setShowExportModal(true)}
+            className="w-full p-5 flex justify-between items-center hover:bg-emerald-900/10 transition-all group"
+          >
+            <div className="text-left">
+              <div className="text-sm font-bold text-white group-hover:text-emerald-500 transition-colors">Générer l'export Excel</div>
+              <div className="text-[10px] text-neutral-500">Filtrage par date, concurrent et rayon</div>
+            </div>
+            <div className="w-10 h-10 bg-neutral-950 rounded-xl flex items-center justify-center text-neutral-700 group-hover:text-emerald-500 transition-all">
+              <FileText className="w-5 h-5" />
+            </div>
           </button>
           
-          <button className="w-full p-5 flex justify-between items-center hover:bg-red-950/20 transition-all group">
+          <button 
+            onClick={() => {
+              if (confirm("Voulez-vous vraiment supprimer tout l'historique des relevés terrain ? Cette action est irréversible.")) {
+                alert("Fonction de nettoyage en cours de développement.");
+              }
+            }}
+            className="w-full p-5 flex justify-between items-center hover:bg-red-950/20 transition-all group"
+          >
             <div className="text-left">
-              <div className="text-sm font-bold text-red-500">Vider les relevés terrain</div>
+              <div className="text-sm font-bold text-red-500">Réinitialiser les données</div>
               <div className="text-[10px] text-neutral-700">Suppression définitive de l'historique</div>
             </div>
             <Trash2 className="w-5 h-5 text-red-900 group-hover:text-red-500" />
@@ -265,9 +305,16 @@ export default function ParametresPage() {
       <div className="pt-4 text-center">
         <div className="flex items-center justify-center gap-1.5 text-[10px] font-bold text-neutral-700 uppercase tracking-widest">
           <Shield className="w-3 h-3" />
-          Vigiprix System v7.6 — Stable
+          Vigiprix System v7.13 — Export Ready
         </div>
       </div>
+
+      {/* Modals */}
+      <ExportModal 
+        isOpen={showExportModal} 
+        onClose={() => setShowExportModal(false)} 
+        rayons={rayons} 
+      />
     </main>
   );
 }

@@ -1,7 +1,18 @@
 "use client";
 
-import { useState } from "react";
-import { Package, X } from "lucide-react";
+import { useState, useEffect } from "react";
+import { 
+  Package, 
+  X, 
+  Save, 
+  Loader2, 
+  Tag, 
+  Layers, 
+  Info, 
+  CheckCircle2, 
+  Database,
+  ArrowRight
+} from "lucide-react";
 import { supabase } from "@/lib/supabase";
 
 interface Props {
@@ -10,131 +21,280 @@ interface Props {
     marque: string | null;
     description_produit: string | null;
     reference_fabricant?: string | null;
-    categorie?: string | null;
+    rayon?: string | null;
+    groupe_produit?: string | null;
     prix_vente: number | null;
+    contenance?: string | null;
+    unite?: string | null;
+    description_complementaire?: string | null;
   };
   onClose: () => void;
 }
 
 export default function EditProductModal({ produit, onClose }: Props) {
-  const [marque, setMarque] = useState(produit.marque || "");
-  const [designation, setDesignation] = useState(produit.description_produit || "");
-  const [reference, setReference] = useState(produit.reference_fabricant || "");
-  const [categorie, setCategorie] = useState(produit.categorie || "");
-  const [prix, setPrix] = useState(produit.prix_vente ? produit.prix_vente.toString() : "");
+  const [formData, setFormData] = useState({
+    marque: produit.marque || "",
+    description_produit: produit.description_produit || "",
+    reference_fabricant: produit.reference_fabricant || "",
+    rayon: produit.rayon || "",
+    groupe_produit: produit.groupe_produit || "",
+    prix_vente: produit.prix_vente ? produit.prix_vente.toString() : "",
+    contenance: produit.contenance || "",
+    unite: produit.unite || "",
+    description_complementaire: produit.description_complementaire || ""
+  });
+
   const [loading, setLoading] = useState(false);
+  const [rayons, setRayons] = useState<string[]>([]);
+  const [groupes, setGroupes] = useState<string[]>([]);
+
+  useEffect(() => {
+    const fetchMeta = async () => {
+      const { data } = await supabase.from("produits").select("rayon, groupe_produit");
+      if (data) {
+        setRayons(Array.from(new Set(data.map(r => r.rayon).filter(Boolean))) as string[]);
+        setGroupes(Array.from(new Set(data.map(r => r.groupe_produit).filter(Boolean))) as string[]);
+      }
+    };
+    fetchMeta();
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
 
-    const priceValue = parseFloat(prix.replace(',', '.'));
+    const priceValue = parseFloat(formData.prix_vente.replace(',', '.'));
 
     const payload = {
-      marque: marque || null,
-      description_produit: designation,
-      reference_fabricant: reference || null,
-      categorie: categorie || null,
+      marque: formData.marque || null,
+      description_produit: formData.description_produit,
+      reference_fabricant: formData.reference_fabricant || null,
+      rayon: formData.rayon || null,
+      groupe_produit: formData.groupe_produit || null,
       prix_vente: isNaN(priceValue) ? null : priceValue,
+      contenance: formData.contenance || null,
+      unite: formData.unite || null,
+      description_complementaire: formData.description_complementaire || null,
+      updated_at: new Date().toISOString()
     };
 
     console.log("[PRODUCT SAVE PAYLOAD] Update:", payload);
 
     try {
-      const { error } = await supabase.from("produits").update(payload).eq("numero_ean", produit.numero_ean);
+      const { error } = await supabase
+        .from("produits")
+        .update(payload)
+        .eq("numero_ean", produit.numero_ean);
 
       if (error) throw error;
       
-      alert("Fiche produit mise à jour !");
+      // Log activité
+      await fetch("/api/activites", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type_action: "modification_produit",
+          ean: produit.numero_ean,
+          details: { ...payload }
+        })
+      });
+
+      onClose();
       window.location.reload();
     } catch (err: any) {
       console.error("Erreur Supabase:", err);
-      alert(`Erreur lors de la mise à jour: ${err.message || JSON.stringify(err)}`);
+      alert(`Erreur: ${err.message}`);
       setLoading(false);
     }
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 animate-in fade-in">
-      <div className="bg-neutral-900 border border-neutral-800 rounded-3xl w-full max-w-sm overflow-hidden animate-in zoom-in-95 duration-200 shadow-2xl">
-        <div className="p-4 flex justify-between items-center border-b border-neutral-800 bg-black/50">
-          <div className="flex items-center gap-2 text-white font-bold">
-            <Package className="w-5 h-5 text-blue-500" />
-            Modifier le produit
+    <div className="fixed inset-0 z-[110] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/90 backdrop-blur-md animate-in fade-in duration-300">
+      <div className="bg-neutral-950 border-t sm:border border-neutral-800 rounded-t-[2.5rem] sm:rounded-[2.5rem] w-full max-w-xl overflow-hidden shadow-2xl animate-in slide-in-from-bottom-10 duration-500 max-h-[95vh] flex flex-col">
+        {/* Header */}
+        <div className="p-6 flex justify-between items-center border-b border-neutral-900 bg-neutral-950/50">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-red-600/10 border border-red-600/20 rounded-xl flex items-center justify-center text-red-600">
+              <Package className="w-5 h-5" />
+            </div>
+            <div>
+              <h2 className="text-xl font-black text-white tracking-tight uppercase">Édition Produit</h2>
+              <p className="text-[10px] font-bold text-neutral-500 uppercase tracking-widest">Mise à jour fiche métier</p>
+            </div>
           </div>
-          <button onClick={onClose} className="p-2 text-neutral-500 hover:text-white rounded-xl transition-colors">
+          <button onClick={onClose} className="p-2 bg-neutral-900 rounded-full text-neutral-500 hover:text-white transition-all active:scale-90">
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-5 flex flex-col gap-4 max-h-[80vh] overflow-y-auto">
-          <div className="text-xs text-neutral-500 font-mono mb-2 bg-black/50 p-2 rounded-lg text-center border border-neutral-800/50">
-            EAN : {produit.numero_ean}
+        {/* Formulaire */}
+        <form onSubmit={handleSubmit} className="p-6 space-y-6 overflow-y-auto flex-1 custom-scrollbar">
+          {/* EAN (ReadOnly) */}
+          <div className="bg-neutral-900/50 border border-neutral-800 rounded-2xl p-3 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Database className="w-4 h-4 text-neutral-600" />
+              <span className="text-[10px] font-black text-neutral-500 uppercase tracking-widest">Code EAN Unique</span>
+            </div>
+            <span className="text-xs font-mono font-bold text-white tracking-tighter bg-black px-3 py-1 rounded-lg border border-neutral-800">
+              {produit.numero_ean}
+            </span>
           </div>
 
-          <div>
-            <label className="text-sm font-medium text-neutral-400 mb-1 block">Désignation <span className="text-red-500">*</span></label>
-            <input
-              type="text"
-              required
-              value={designation}
-              onChange={(e) => setDesignation(e.target.value)}
-              className="w-full bg-black border border-neutral-800 rounded-xl px-4 py-3 text-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-all"
-            />
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-sm font-medium text-neutral-400 mb-1 block">Marque <span className="text-red-500">*</span></label>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+            {/* Désignation */}
+            <div className="sm:col-span-2 space-y-2">
+              <label className="text-[10px] font-black text-neutral-500 uppercase tracking-widest flex items-center gap-2 px-1">
+                <Tag className="w-3 h-3" /> Désignation Commerciale <span className="text-red-500">*</span>
+              </label>
               <input
                 type="text"
                 required
-                value={marque}
-                onChange={(e) => setMarque(e.target.value)}
-                className="w-full bg-black border border-neutral-800 rounded-xl px-4 py-3 text-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-all"
+                value={formData.description_produit}
+                onChange={(e) => setFormData({...formData, description_produit: e.target.value})}
+                placeholder="Ex: Interrupteur Va-et-Vient"
+                className="w-full bg-black border border-neutral-800 rounded-xl px-4 py-3.5 text-white focus:border-red-600 transition-all outline-none placeholder:text-neutral-800"
               />
             </div>
-            <div>
-              <label className="text-sm font-medium text-neutral-400 mb-1 block">Réf Fabricant</label>
-              <input
-                type="text"
-                value={reference}
-                onChange={(e) => setReference(e.target.value)}
-                className="w-full bg-black border border-neutral-800 rounded-xl px-4 py-3 text-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-all"
-              />
-            </div>
-          </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-sm font-medium text-neutral-400 mb-1 block">Catégorie</label>
+            {/* Marque */}
+            <div className="space-y-2">
+              <label className="text-[10px] font-black text-neutral-500 uppercase tracking-widest flex items-center gap-2 px-1">
+                <CheckCircle2 className="w-3 h-3" /> Marque <span className="text-red-500">*</span>
+              </label>
               <input
                 type="text"
-                value={categorie}
-                onChange={(e) => setCategorie(e.target.value)}
-                className="w-full bg-black border border-neutral-800 rounded-xl px-4 py-3 text-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-all"
+                required
+                value={formData.marque}
+                onChange={(e) => setFormData({...formData, marque: e.target.value})}
+                placeholder="Ex: Legrand"
+                className="w-full bg-black border border-neutral-800 rounded-xl px-4 py-3.5 text-white focus:border-red-600 transition-all outline-none placeholder:text-neutral-800"
               />
             </div>
-            <div>
-              <label className="text-sm font-medium text-neutral-400 mb-1 block">Prix Local (€)</label>
+
+            {/* Prix */}
+            <div className="space-y-2">
+              <label className="text-[10px] font-black text-neutral-500 uppercase tracking-widest flex items-center gap-2 px-1">
+                <Database className="w-3 h-3" /> Prix Vente Magasin (€)
+              </label>
               <input
                 type="text"
                 inputMode="decimal"
-                value={prix}
-                onChange={(e) => setPrix(e.target.value)}
-                className="w-full bg-black border border-neutral-800 rounded-xl px-4 py-3 text-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-all font-bold"
+                value={formData.prix_vente}
+                onChange={(e) => setFormData({...formData, prix_vente: e.target.value})}
+                placeholder="0.00"
+                className="w-full bg-black border border-neutral-800 rounded-xl px-4 py-3.5 text-white focus:border-red-600 transition-all outline-none font-black text-lg placeholder:text-neutral-800"
+              />
+            </div>
+
+            {/* Rayon */}
+            <div className="space-y-2">
+              <label className="text-[10px] font-black text-neutral-500 uppercase tracking-widest flex items-center gap-2 px-1">
+                <Layers className="w-3 h-3" /> Rayon Métier
+              </label>
+              <div className="relative">
+                <select
+                  value={formData.rayon}
+                  onChange={(e) => setFormData({...formData, rayon: e.target.value})}
+                  className="w-full bg-black border border-neutral-800 rounded-xl px-4 py-3.5 text-white focus:border-red-600 outline-none appearance-none pr-10"
+                >
+                  <option value="">Sélectionner...</option>
+                  {rayons.map(r => <option key={r} value={r}>{r}</option>)}
+                </select>
+                <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-neutral-600">
+                  <ArrowRight className="w-4 h-4 rotate-90" />
+                </div>
+              </div>
+            </div>
+
+            {/* Famille (Groupe) */}
+            <div className="space-y-2">
+              <label className="text-[10px] font-black text-neutral-500 uppercase tracking-widest flex items-center gap-2 px-1">
+                <Layers className="w-3 h-3" /> Famille Produit
+              </label>
+              <input
+                type="text"
+                value={formData.groupe_produit}
+                onChange={(e) => setFormData({...formData, groupe_produit: e.target.value})}
+                placeholder="Ex: Interrupteurs"
+                className="w-full bg-black border border-neutral-800 rounded-xl px-4 py-3.5 text-white focus:border-red-600 transition-all outline-none placeholder:text-neutral-800"
+              />
+            </div>
+
+            {/* Contenance & Unité */}
+            <div className="grid grid-cols-2 gap-3 sm:col-span-1">
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-neutral-500 uppercase tracking-widest px-1">Contenance</label>
+                <input
+                  type="text"
+                  value={formData.contenance}
+                  onChange={(e) => setFormData({...formData, contenance: e.target.value})}
+                  placeholder="Ex: 1"
+                  className="w-full bg-black border border-neutral-800 rounded-xl px-4 py-3.5 text-white focus:border-red-600 transition-all outline-none"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-neutral-500 uppercase tracking-widest px-1">Unité</label>
+                <input
+                  type="text"
+                  value={formData.unite}
+                  onChange={(e) => setFormData({...formData, unite: e.target.value})}
+                  placeholder="L, Kg, Pce..."
+                  className="w-full bg-black border border-neutral-800 rounded-xl px-4 py-3.5 text-white focus:border-red-600 transition-all outline-none"
+                />
+              </div>
+            </div>
+
+            {/* Réf Fabricant */}
+            <div className="space-y-2">
+              <label className="text-[10px] font-black text-neutral-500 uppercase tracking-widest px-1">Réf Fabricant</label>
+              <input
+                type="text"
+                value={formData.reference_fabricant}
+                onChange={(e) => setFormData({...formData, reference_fabricant: e.target.value})}
+                placeholder="Ex: 077011"
+                className="w-full bg-black border border-neutral-800 rounded-xl px-4 py-3.5 text-white focus:border-red-600 transition-all outline-none"
+              />
+            </div>
+
+            {/* Description Complémentaire */}
+            <div className="sm:col-span-2 space-y-2">
+              <label className="text-[10px] font-black text-neutral-500 uppercase tracking-widest flex items-center gap-2 px-1">
+                <Info className="w-3 h-3" /> Description Complémentaire
+              </label>
+              <textarea
+                value={formData.description_complementaire}
+                onChange={(e) => setFormData({...formData, description_complementaire: e.target.value})}
+                placeholder="Détails techniques, usage..."
+                rows={3}
+                className="w-full bg-black border border-neutral-800 rounded-2xl px-4 py-3.5 text-white focus:border-red-600 transition-all outline-none resize-none placeholder:text-neutral-800"
               />
             </div>
           </div>
-
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full mt-4 bg-blue-600 hover:bg-blue-500 text-white font-bold py-4 rounded-xl transition-colors disabled:opacity-50"
-          >
-            {loading ? "Sauvegarde..." : "Enregistrer les modifications"}
-          </button>
         </form>
+
+        {/* Footer Actions */}
+        <div className="p-6 border-t border-neutral-900 bg-neutral-950/80 backdrop-blur-md flex gap-4">
+          <button
+            onClick={onClose}
+            className="flex-1 bg-neutral-900 text-neutral-400 font-bold py-4 rounded-2xl hover:text-white transition-all active:scale-95"
+          >
+            ANNULER
+          </button>
+          <button
+            onClick={handleSubmit}
+            disabled={loading}
+            className="flex-[2] bg-red-600 hover:bg-red-500 text-white font-black py-4 rounded-2xl transition-all shadow-lg shadow-red-600/20 flex items-center justify-center gap-3 active:scale-95 disabled:opacity-50"
+          >
+            {loading ? (
+              <Loader2 className="w-5 h-5 animate-spin" />
+            ) : (
+              <>
+                <Save className="w-5 h-5" />
+                ENREGISTRER
+              </>
+            )}
+          </button>
+        </div>
       </div>
     </div>
   );
