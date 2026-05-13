@@ -1,17 +1,20 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Link from "next/link";
 import { 
   Zap, 
   Trash2, 
   Settings, 
-  ExternalLink, 
   Copy, 
   Database, 
   FileText, 
   ChevronRight,
   Shield,
-  Gauge
+  Gauge,
+  FileSpreadsheet,
+  Upload,
+  History
 } from "lucide-react";
 import ExportModal from "./ExportModal";
 import { supabase } from "@/lib/supabase";
@@ -250,6 +253,28 @@ export default function ParametresPage() {
             </div>
             <p className="text-[9px] text-neutral-600 mt-1 uppercase tracking-tighter">Bientôt disponible</p>
           </div>
+        </div>
+      </section>
+
+      {/* 3bis. SECTION GESTION CATALOGUE */}
+      <section className="space-y-3">
+        <div className="flex items-center gap-2 px-1">
+          <FileSpreadsheet className="w-4 h-4 text-emerald-500" />
+          <h2 className="text-xs font-black text-neutral-400 uppercase tracking-widest">Gestion Catalogue</h2>
+        </div>
+        <div className="bg-neutral-900 border border-neutral-800 rounded-3xl overflow-hidden shadow-xl group">
+          <Link 
+            href="/import-produits"
+            className="p-5 flex justify-between items-center hover:bg-emerald-900/10 transition-all"
+          >
+            <div className="text-left">
+              <div className="text-sm font-bold text-white group-hover:text-emerald-500 transition-colors">Importation Massive Excel</div>
+              <div className="text-[10px] text-neutral-500">Mise à jour globale du catalogue (.xlsx)</div>
+            </div>
+            <div className="w-12 h-12 bg-emerald-600/10 rounded-2xl flex items-center justify-center text-emerald-500 group-hover:scale-110 transition-transform">
+              <Upload className="w-6 h-6" />
+            </div>
+          </Link>
         </div>
       </section>
 

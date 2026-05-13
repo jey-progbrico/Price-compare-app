@@ -24,9 +24,6 @@ interface Props {
     rayon?: string | null;
     groupe_produit?: string | null;
     prix_vente: number | null;
-    contenance?: string | null;
-    unite?: string | null;
-    description_complementaire?: string | null;
   };
   onClose: () => void;
 }
@@ -38,10 +35,7 @@ export default function EditProductModal({ produit, onClose }: Props) {
     reference_fabricant: produit.reference_fabricant || "",
     rayon: produit.rayon || "",
     groupe_produit: produit.groupe_produit || "",
-    prix_vente: produit.prix_vente ? produit.prix_vente.toString() : "",
-    contenance: produit.contenance || "",
-    unite: produit.unite || "",
-    description_complementaire: produit.description_complementaire || ""
+    prix_vente: produit.prix_vente ? produit.prix_vente.toString() : ""
   });
 
   const [loading, setLoading] = useState(false);
@@ -72,9 +66,6 @@ export default function EditProductModal({ produit, onClose }: Props) {
       rayon: formData.rayon || null,
       groupe_produit: formData.groupe_produit || null,
       prix_vente: isNaN(priceValue) ? null : priceValue,
-      contenance: formData.contenance || null,
-      unite: formData.unite || null,
-      description_complementaire: formData.description_complementaire || null,
       updated_at: new Date().toISOString()
     };
 
@@ -220,30 +211,6 @@ export default function EditProductModal({ produit, onClose }: Props) {
               />
             </div>
 
-            {/* Contenance & Unité */}
-            <div className="grid grid-cols-2 gap-3 sm:col-span-1">
-              <div className="space-y-2">
-                <label className="text-[10px] font-black text-neutral-500 uppercase tracking-widest px-1">Contenance</label>
-                <input
-                  type="text"
-                  value={formData.contenance}
-                  onChange={(e) => setFormData({...formData, contenance: e.target.value})}
-                  placeholder="Ex: 1"
-                  className="w-full bg-black border border-neutral-800 rounded-xl px-4 py-3.5 text-white focus:border-red-600 transition-all outline-none"
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-[10px] font-black text-neutral-500 uppercase tracking-widest px-1">Unité</label>
-                <input
-                  type="text"
-                  value={formData.unite}
-                  onChange={(e) => setFormData({...formData, unite: e.target.value})}
-                  placeholder="L, Kg, Pce..."
-                  className="w-full bg-black border border-neutral-800 rounded-xl px-4 py-3.5 text-white focus:border-red-600 transition-all outline-none"
-                />
-              </div>
-            </div>
-
             {/* Réf Fabricant */}
             <div className="space-y-2">
               <label className="text-[10px] font-black text-neutral-500 uppercase tracking-widest px-1">Réf Fabricant</label>
@@ -253,20 +220,6 @@ export default function EditProductModal({ produit, onClose }: Props) {
                 onChange={(e) => setFormData({...formData, reference_fabricant: e.target.value})}
                 placeholder="Ex: 077011"
                 className="w-full bg-black border border-neutral-800 rounded-xl px-4 py-3.5 text-white focus:border-red-600 transition-all outline-none"
-              />
-            </div>
-
-            {/* Description Complémentaire */}
-            <div className="sm:col-span-2 space-y-2">
-              <label className="text-[10px] font-black text-neutral-500 uppercase tracking-widest flex items-center gap-2 px-1">
-                <Info className="w-3 h-3" /> Description Complémentaire
-              </label>
-              <textarea
-                value={formData.description_complementaire}
-                onChange={(e) => setFormData({...formData, description_complementaire: e.target.value})}
-                placeholder="Détails techniques, usage..."
-                rows={3}
-                className="w-full bg-black border border-neutral-800 rounded-2xl px-4 py-3.5 text-white focus:border-red-600 transition-all outline-none resize-none placeholder:text-neutral-800"
               />
             </div>
           </div>

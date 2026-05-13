@@ -33,8 +33,6 @@ export default function BarcodeScanner({ onClose }: { onClose: () => void }) {
     marque: "",
     rayon: "",
     groupe_produit: "",
-    contenance: "",
-    unite: "",
     prix_vente: ""
   });
   
@@ -129,8 +127,6 @@ export default function BarcodeScanner({ onClose }: { onClose: () => void }) {
         marque: formData.marque,
         rayon: formData.rayon,
         groupe_produit: formData.groupe_produit,
-        contenance: formData.contenance,
-        unite: formData.unite,
         prix_vente: parseFloat(formData.prix_vente) || 0,
         updated_at: new Date().toISOString()
       }]);
@@ -359,7 +355,6 @@ export default function BarcodeScanner({ onClose }: { onClose: () => void }) {
                     >
                       <option value="">Sélectionner...</option>
                       {rayons.map(r => <option key={r} value={r}>{r}</option>)}
-                      <option value="Autre">Autre (Nouveau)</option>
                     </select>
                   </div>
 
