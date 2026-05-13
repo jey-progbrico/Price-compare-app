@@ -1,5 +1,6 @@
 import { checkCache, getStaleResults, saveResults } from "./cacheManager";
-import { runFallbackScrapers } from "./fallbackScrapers";
+import { decouvrirProduitViaDDG } from "./duckDuckGoEngine";
+import { buildSearchQueries } from "./queryBuilder";
 import type {
   SearchResult,
   ProductInfo,
@@ -9,14 +10,22 @@ import type {
 } from "./types";
 
 /**
- * SearchOrchestrator — Vigiprix (Simplified v1)
+ * SearchOrchestrator — Vigiprix (v2 DuckDuckGo)
  *
- * Mode minimal pour restaurer la stabilité :
+ * Mode découverte externe via DuckDuckGo HTML :
  * 1. Cache Supabase
- * 2. Scraper ManoMano direct (pas de Google CSE, pas de scoring complexe)
+ * 2. Découverte DDG sur marchands cibles (ManoMano, Brico Dépôt, etc.)
  */
 
 const DEFAULT_TTL_HOURS = 168;
+
+const MARCHANDS_CIBLES = [
+  "manomano.fr",
+  "bricodepot.fr",
+  "leroymerlin.fr",
+  "bricomarche.com",
+  "castorama.fr"
+];
 
 export interface OrchestratorCallbacks {
   onEvent: (event: SearchEvent) => void;
@@ -68,52 +77,70 @@ export async function runSearch(
     }
   }
 
-  // ─── ÉTAPE 2 : Recherche Live (Simplified Mode - ManoMano Only) ───────────
+  // ─── ÉTAPE 2 : Génération des requêtes (Normalisation incluse) ───────────
   
-  const query = product.ean || product.designation || "";
-  console.log(`[PIPELINE] Minimal Search for: "${query}"`);
-  
-  emit({ type: "source_start", source: "scraper_manomano", status: "running" });
-  stats.sources_tried.push("scraper_manomano");
+  const requetes = buildSearchQueries(product);
+  console.log(`[PIPELINE] Requêtes générées : ${requetes.length}`);
+  requetes.forEach(q => console.log(`  -> [${q.type}] ${q.query}`));
 
-  try {
-    const { results: fallbackResults } = await runFallbackScrapers(
-      query, 
-      product, 
-      new Set(), 
-      (result) => {
-        emit({ type: "source_result", source: "scraper_manomano", result });
+  // ─── ÉTAPE 3 : Recherche Live via DuckDuckGo ─────────────────────────────
+  
+  // On priorise la recherche par EAN pour la découverte initiale
+  const requeteEAN = requetes.find(q => q.type === "ean")?.query || product.ean;
+
+  for (const site of MARCHANDS_CIBLES) {
+    const sourceId = `ddg_${site.split('.')[0]}`;
+    emit({ type: "source_start", source: sourceId, status: "running" });
+    stats.sources_tried.push(sourceId);
+
+    try {
+      // Tentative de découverte via DDG
+      const resultat = await decouvrirProduitViaDDG(product, site, `${requeteEAN} site:${site}`);
+      
+      if (resultat) {
+        allResults.push(resultat);
+        stats.from_scrapers++;
+        stats.sources_success.push(sourceId);
+        emit({ type: "source_result", source: sourceId, result: resultat });
+        emit({ type: "source_end", source: sourceId, status: "success" });
+      } else {
+        // Fallback optionnel : tenter avec une désignation normalisée si l'EAN n'a rien donné
+        const requeteDesig = requetes.find(q => q.type === "mixed")?.query;
+        if (requeteDesig) {
+          console.log(`[PIPELINE] Tentative fallback désignation pour ${site}...`);
+          const resultatFallback = await decouvrirProduitViaDDG(product, site, `${requeteDesig} site:${site}`);
+          if (resultatFallback) {
+            allResults.push(resultatFallback);
+            stats.from_scrapers++;
+            stats.sources_success.push(sourceId);
+            emit({ type: "source_result", source: sourceId, result: resultatFallback });
+            emit({ type: "source_end", source: sourceId, status: "success" });
+            continue;
+          }
+        }
+        emit({ type: "source_end", source: sourceId, status: "not_found" });
       }
-    );
-
-    if (fallbackResults.length > 0) {
-      allResults.push(...fallbackResults);
-      stats.from_scrapers = fallbackResults.length;
-      stats.sources_success.push("scraper_manomano");
-      emit({ type: "source_end", source: "scraper_manomano", status: "success" });
-    } else {
-      emit({ type: "source_end", source: "scraper_manomano", status: "not_found" });
+    } catch (err: any) {
+      console.log(`[PIPELINE] Erreur lors de la recherche ${site} : ${err.message}`);
+      emit({ type: "source_end", source: sourceId, status: "error" });
     }
-  } catch (err: any) {
-    console.log(`[PIPELINE] Error during minimal search: ${err.message}`);
-    emit({ type: "source_end", source: "scraper_manomano", status: "error" });
   }
 
-  // ─── ÉTAPE 3 : Sauvegarde cache ──────────────────────────────────────────
+  // ─── ÉTAPE 4 : Sauvegarde cache ──────────────────────────────────────────
 
   const liveResults = allResults.filter(r => r.source !== "cache");
   if (liveResults.length > 0) {
-    saveResults(product.ean, liveResults).catch(err => console.error("[PIPELINE] Cache save error:", err.message));
+    saveResults(product.ean, liveResults).catch(err => console.error("[PIPELINE] Erreur sauvegarde cache :", err.message));
   }
 
-  // ─── ÉTAPE 4 : Fin ───────────────────────────────────────────────────────
+  // ─── ÉTAPE 5 : Fin ───────────────────────────────────────────────────────
 
   stats.total_results = allResults.length;
   stats.with_price = allResults.filter(r => r.prix !== null).length;
   stats.without_price = allResults.filter(r => r.prix === null).length;
   stats.duration_ms = Date.now() - startTime;
 
-  console.log(`[PIPELINE] COMPLETE | Total results: ${stats.total_results} | Duration: ${stats.duration_ms}ms`);
+  console.log(`[PIPELINE] TERMINE | Total résultats : ${stats.total_results} | Durée : ${stats.duration_ms}ms`);
   emit({ type: "done", results: allResults, stats });
   return { results: allResults, stats };
 }

@@ -1,4 +1,5 @@
 import type { ProductInfo } from "./types";
+import { normaliserDesignation } from "./normalization";
 
 /**
  * QueryBuilder — Vigiprix (v7)
@@ -85,18 +86,38 @@ export function buildSearchQueries(product: ProductInfo): SearchQuery[] {
     });
   }
 
-  // 4. Marque + Désignation technique
-  if (cleanMarque && cleanDesig) {
-    const keywords = extractKeywords(cleanDesig, 4);
-    if (keywords) {
-      queries.push({
-        query: `${cleanMarque} ${keywords} ${cleanCat || ""}`,
-        priority: 4,
-        type: "mixed",
-        description: `Marque + Mots-clés: ${cleanMarque} ${keywords}`
-      });
-    }
+  // 4. Marque + Désignation technique (Originale et Normalisée)
+  const designationsATester = [cleanDesig];
+  if (cleanDesig) {
+    const variantes = normaliserDesignation(cleanDesig);
+    designationsATester.push(...variantes);
   }
+
+  designationsATester.forEach((desig, index) => {
+    if (!desig) return;
+    const keywords = extractKeywords(desig, 5);
+    const priorityBase = index === 0 ? 4 : 5; // Priorité un peu plus basse pour les variantes
+
+    if (keywords) {
+      // Désignation seule
+      queries.push({
+        query: keywords,
+        priority: priorityBase,
+        type: "designation",
+        description: `Désignation (${index === 0 ? "orig" : "norm"}): ${keywords}`
+      });
+
+      // Marque + Désignation
+      if (cleanMarque) {
+        queries.push({
+          query: `${cleanMarque} ${keywords}`,
+          priority: priorityBase,
+          type: "mixed",
+          description: `Marque + Désignation (${index === 0 ? "orig" : "norm"}): ${cleanMarque} ${keywords}`
+        });
+      }
+    }
+  });
 
   const seen = new Set<string>();
   return queries

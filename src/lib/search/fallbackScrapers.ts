@@ -34,8 +34,7 @@ function randomDelay(): Promise<void> {
 }
 
 // ─── Fetch stealth avec Timeout ───────────────────────────────────────────────
-
-async function fetchStealth(url: string, timeoutMs = FETCH_TIMEOUT_MS): Promise<Response> {
+export async function fetchStealth(url: string, timeoutMs = FETCH_TIMEOUT_MS): Promise<Response> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
