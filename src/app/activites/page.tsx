@@ -40,10 +40,10 @@ const ACTION_CONFIG: Record<string, { label: string, color: string, icon: any }>
 };
 
 const columns = [
-  { key: "type_action", label: "Action" },
-  { key: "ean", label: "Produit concerné" },
-  { key: "details", label: "Détails de l'opération" },
-  { key: "created_at", label: "Date & Heure", align: "right" as const },
+  { key: "type_action", header: "Action" },
+  { key: "ean", header: "Produit concerné" },
+  { key: "details", header: "Détails de l'opération" },
+  { key: "created_at", header: "Date & Heure", className: "text-right" },
 ];
 
 export default function ActivitesPage() {
