@@ -2,8 +2,9 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { Edit2 } from "lucide-react";
+import { Edit2, Trash2 } from "lucide-react";
 import EditProductModal from "./EditProductModal";
+import DeleteProductModal from "./DeleteProductModal";
 
 interface Props {
   ean: string;
@@ -13,6 +14,7 @@ interface Props {
 
 export default function ProductHeader({ ean, produit, isUnknown }: Props) {
   const [showEdit, setShowEdit] = useState(false);
+  const [showDelete, setShowDelete] = useState(false);
   const router = useRouter();
 
   return (
@@ -25,7 +27,7 @@ export default function ProductHeader({ ean, produit, isUnknown }: Props) {
         >
           <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
         </button>
-        <div className="flex-1">
+        <div className="flex-1 overflow-hidden">
           <p className="text-xs text-neutral-500 font-mono tracking-wider">EAN: {ean}</p>
           <div className="flex items-center gap-3">
             <h1 className="text-lg font-bold truncate">
@@ -34,7 +36,7 @@ export default function ProductHeader({ ean, produit, isUnknown }: Props) {
             {!isUnknown && (
               <button 
                 onClick={() => setShowEdit(true)} 
-                className="p-1.5 bg-neutral-900 text-neutral-400 hover:text-white hover:bg-neutral-800 rounded-lg transition-colors"
+                className="p-1.5 bg-neutral-900 text-neutral-400 hover:text-white hover:bg-neutral-800 rounded-lg transition-colors shrink-0"
                 title="Modifier le produit"
               >
                 <Edit2 className="w-4 h-4" />
@@ -54,6 +56,17 @@ export default function ProductHeader({ ean, produit, isUnknown }: Props) {
             )}
           </div>
         </div>
+
+        {/* Action de suppression isolée */}
+        {!isUnknown && (
+          <button 
+            onClick={() => setShowDelete(true)}
+            className="w-10 h-10 bg-red-600/10 hover:bg-red-600 border border-red-600/20 hover:border-red-600 rounded-xl flex items-center justify-center text-red-500 hover:text-white transition-all active:scale-90 shrink-0"
+            title="Supprimer le produit"
+          >
+            <Trash2 className="w-5 h-5" />
+          </button>
+        )}
       </div>
 
       {/* Internal Price Card */}
@@ -79,6 +92,10 @@ export default function ProductHeader({ ean, produit, isUnknown }: Props) {
 
       {showEdit && produit && (
         <EditProductModal produit={produit} onClose={() => setShowEdit(false)} />
+      )}
+
+      {showDelete && produit && (
+        <DeleteProductModal produit={produit} onClose={() => setShowDelete(false)} />
       )}
     </>
   );

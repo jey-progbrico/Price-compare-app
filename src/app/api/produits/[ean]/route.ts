@@ -27,7 +27,23 @@ export async function DELETE(
   console.log(`\n🗑️  [DELETE /api/produits] Suppression produit EAN: ${eanClean}`);
 
   try {
-    // ── 1. Supprimer d'abord le cache (contrainte FK éventuelle) ────────────
+    // ── 0. Récupérer les infos du produit pour le log avant suppression ──────
+    const { data: produit, error: fetchError } = await supabase
+      .from("produits")
+      .select("description_produit, rayon, groupe_produit")
+      .eq("numero_ean", eanClean)
+      .maybeSingle();
+
+    if (fetchError) {
+      console.error(`[DELETE /api/produits] Erreur fetch produit:`, fetchError);
+    }
+
+    if (!produit) {
+      console.warn(`[DELETE /api/produits] Aucun produit trouvé pour EAN: ${eanClean}`);
+      return NextResponse.json({ error: "Produit introuvable" }, { status: 404 });
+    }
+
+    // ── 1. Supprimer le cache (search results) ───────────────────────────────
     const { error: cacheError } = await supabase
       .from("cache_prix")
       .delete()
@@ -35,26 +51,12 @@ export async function DELETE(
 
     if (cacheError) {
       console.error(`[DELETE /api/produits] Erreur suppression cache_prix:`, cacheError);
-      return NextResponse.json(
-        { error: `Impossible de supprimer le cache: ${cacheError.message}` },
-        { status: 500 }
-      );
+      // On continue quand même, le cache n'est pas critique
+    } else {
+      console.log(`   ✅ cache_prix: lignes supprimées`);
     }
-    console.log(`   ✅ cache_prix: lignes supprimées`);
 
     // ── 2. Supprimer le produit ─────────────────────────────────────────────
-    // Vérifier si le produit existe avant de supprimer
-    const { data: existing } = await supabase
-      .from("produits")
-      .select("numero_ean")
-      .eq("numero_ean", eanClean)
-      .maybeSingle();
-
-    if (!existing) {
-      console.warn(`[DELETE /api/produits] Aucun produit trouvé pour EAN: ${eanClean}`);
-      return NextResponse.json({ error: "Produit introuvable" }, { status: 404 });
-    }
-
     const { error: produitError } = await supabase
       .from("produits")
       .delete()
@@ -68,6 +70,26 @@ export async function DELETE(
       );
     }
     console.log(`   ✅ produits: ligne supprimée`);
+
+    // ── 3. Logger l'activité ───────────────────────────────────────────────
+    try {
+      await supabase
+        .from("historique_activites")
+        .insert([{
+          type_action: "suppression_produit",
+          ean: eanClean,
+          details: {
+            nom: produit.description_produit,
+            rayon: produit.rayon,
+            famille: produit.groupe_produit,
+            date_suppression: new Date().toISOString()
+          },
+          created_at: new Date().toISOString()
+        }]);
+      console.log(`   ✅ historique_activites: log ajouté`);
+    } catch (logErr) {
+      console.error(`[DELETE /api/produits] Erreur logging activité:`, logErr);
+    }
 
     console.log(`🟢 [DELETE /api/produits] Suppression complète pour EAN: ${eanClean}`);
     return new NextResponse(null, { status: 204 });
