@@ -19,7 +19,7 @@ export default async function ProductPage({
   // Fetch product from supabase
   const { data: produit, error } = await supabase
     .from("produits")
-    .select("description_produit, numero_ean, groupe_produit, marque, prix_vente, devise, reference_fabricant, categorie")
+    .select("description_produit, numero_ean, groupe_produit, marque, prix_vente, devise, reference_fabricant, categorie, rayon")
     .eq("numero_ean", ean)
     .single();
 

@@ -21,9 +21,50 @@ export default function ParametresPage() {
   const [cacheCount, setCacheCount] = useState(0);
 
   useEffect(() => {
+    const fetchSettings = async () => {
+      try {
+        const res = await fetch("/api/settings");
+        if (res.ok) {
+          const data = await res.json();
+          if (data.cache_duration) setCacheDuration(data.cache_duration);
+          if (data.price_threshold) setPriceThreshold(data.price_threshold);
+          console.log("[SETTINGS LOADED] Configuration chargée depuis Supabase");
+        }
+      } catch (err) {
+        console.error("Erreur chargement settings:", err);
+      }
+    };
+
+    fetchSettings();
     // Simulation de récupération des stats
     setCacheCount(124);
   }, []);
+
+  const saveSetting = async (key: string, value: string) => {
+    try {
+      const res = await fetch("/api/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ key, value }),
+      });
+      if (res.ok) {
+        console.log(`[SETTINGS SAVED] ${key} mis à jour : ${value}`);
+      }
+    } catch (err) {
+      console.error(`Erreur sauvegarde ${key}:`, err);
+    }
+  };
+
+  const handleCacheDurationChange = (d: string) => {
+    setCacheDuration(d);
+    saveSetting("cache_duration", d);
+  };
+
+  const handlePriceThresholdChange = (val: string) => {
+    setPriceThreshold(val);
+    // Sauvegarder après un court délai ou au changement
+    saveSetting("price_threshold", val);
+  };
 
   const bookmarkletCode = `javascript:(function(){var ean=document.body.innerText.match(/\\b\\d{13}\\b/)?.[0]||'';var url=encodeURIComponent(location.href);var title=encodeURIComponent(document.title);window.open('${typeof window !== 'undefined' ? window.location.origin : ''}/import?ean='+ean+'&url='+url+'&title='+title,'_blank');})();`;
 
@@ -137,7 +178,7 @@ export default function ParametresPage() {
               {["7", "14", "30"].map(d => (
                 <button
                   key={d}
-                  onClick={() => setCacheDuration(d)}
+                  onClick={() => handleCacheDurationChange(d)}
                   className={`py-2 rounded-xl text-xs font-bold border transition-all ${
                     cacheDuration === d 
                       ? "bg-blue-600 border-blue-500 text-white" 
@@ -176,7 +217,7 @@ export default function ParametresPage() {
               <input 
                 type="number" 
                 value={priceThreshold}
-                onChange={(e) => setPriceThreshold(e.target.value)}
+                onChange={(e) => handlePriceThresholdChange(e.target.value)}
                 className="w-20 bg-black border border-neutral-800 rounded-xl px-3 py-2 text-white font-bold text-sm outline-none focus:border-violet-600 transition-all"
               />
               <span className="text-[10px] text-neutral-500 leading-tight">

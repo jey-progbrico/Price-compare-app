@@ -1,50 +1,66 @@
 import { supabase } from "@/lib/supabase";
-import ProductListClient from "./ProductListClient";
-import { Package } from "lucide-react";
+import { Package, ArrowRight, ChevronLeft } from "lucide-react";
+import Link from "next/link";
 
 export const dynamic = "force-dynamic";
 export const fetchCache = "force-no-store";
 
 export default async function ProduitsPage() {
-  let produits: any[] = [];
-  let supabaseError = null;
+  // Récupérer les rayons uniques
+  const { data: rayons, error } = await supabase
+    .from("produits")
+    .select("rayon")
+    .not("rayon", "is", null)
+    .order("rayon", { ascending: true });
 
-  try {
-    const { data, error } = await supabase
-      .from("produits")
-      .select("numero_ean, description_produit, marque, prix_vente, devise, groupe_produit")
-      .order("groupe_produit", { ascending: true })
-      .order("numero_ean", { ascending: false })
-      .range(0, 3000);
-
-    if (error) {
-      console.error("Erreur produits:", error);
-      supabaseError = error.message;
-    } else if (data) {
-      produits = data;
-    }
-  } catch (err: any) {
-    console.error("Exception produits:", err);
-    supabaseError = err.message || "Erreur technique Supabase";
+  if (error) {
+    console.error(error);
   }
 
+  // Extraire les rayons uniques
+  const uniqueRayons = Array.from(new Set(rayons?.map(r => r.rayon) || [])).map(name => ({
+    name,
+    slug: encodeURIComponent(name!.toLowerCase().replace(/\s+/g, '-'))
+  }));
+
   return (
-    <div className="p-4 sm:p-6 min-h-full flex flex-col pt-8 animate-in fade-in">
-      <div className="flex items-center gap-3 mb-6">
-        <div className="w-10 h-10 bg-red-900/20 text-red-500 rounded-xl flex items-center justify-center">
-          <Package className="w-5 h-5" />
-        </div>
-        <h1 className="text-2xl font-bold text-white">Mon Catalogue</h1>
+    <main className="min-h-full bg-[#0a0a0c] p-4 sm:p-6 pt-12 pb-24 space-y-8 animate-in fade-in">
+      <div className="flex flex-col gap-2">
+        <h1 className="text-3xl font-black text-white leading-tight tracking-tighter">Catalogue</h1>
+        <p className="text-xs text-neutral-500 font-medium uppercase tracking-widest">Sélectionnez un univers</p>
       </div>
-      
-      {supabaseError && (
-        <div className="mb-6 p-4 bg-red-900/20 border border-red-500/50 rounded-2xl">
-          <h3 className="text-red-500 font-bold mb-1 text-sm">Erreur Supabase Critique</h3>
-          <p className="text-xs text-red-400 font-mono break-all">{supabaseError}</p>
+
+      <div className="grid grid-cols-2 gap-4">
+        {uniqueRayons.map((rayon) => (
+          <Link 
+            key={rayon.name}
+            href={`/rayon/${rayon.slug}`}
+            className="group relative aspect-square bg-neutral-900 border border-neutral-800 rounded-3xl p-6 flex flex-col justify-end overflow-hidden hover:border-red-600/50 transition-all active:scale-[0.98] shadow-xl"
+          >
+            {/* Décoration de fond */}
+            <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
+              <Package className="w-16 h-16 text-white" />
+            </div>
+            
+            <div className="relative z-10">
+              <div className="w-8 h-1 rounded-full bg-red-600 mb-3 group-hover:w-12 transition-all" />
+              <h2 className="text-base font-black text-white leading-tight uppercase">
+                {rayon.name}
+              </h2>
+              <div className="flex items-center gap-1 mt-2 text-[9px] font-bold text-neutral-500 group-hover:text-red-500 transition-colors uppercase tracking-widest">
+                Découvrir <ArrowRight className="w-3 h-3" />
+              </div>
+            </div>
+          </Link>
+        ))}
+      </div>
+
+      {uniqueRayons.length === 0 && (
+        <div className="text-center py-20 text-neutral-600">
+          <Package className="w-12 h-12 mx-auto mb-4 opacity-10" />
+          <p className="text-sm font-bold uppercase tracking-widest opacity-30">Aucun rayon trouvé</p>
         </div>
       )}
-      
-      <ProductListClient initialProducts={produits || []} />
-    </div>
+    </main>
   );
 }
