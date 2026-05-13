@@ -10,11 +10,12 @@ import type {
 } from "./types";
 
 /**
- * SearchOrchestrator — Vigiprix (v2 DuckDuckGo)
+ * SearchOrchestrator — Vigiprix (v3 - Découverte Pure)
  *
- * Mode découverte externe via DuckDuckGo HTML :
- * 1. Cache Supabase
- * 2. Découverte DDG sur marchands cibles (ManoMano, Brico Dépôt, etc.)
+ * Pipeline simplifié pour la veille semi-manuelle :
+ * 1. Cache Supabase (URLs connues)
+ * 2. Découverte DuckDuckGo (Nouvelles URLs)
+ * 3. AUCUNE extraction de prix automatique
  */
 
 const DEFAULT_TTL_HOURS = 168;
@@ -57,7 +58,7 @@ export async function runSearch(
     sources_success: [],
   };
 
-  // ─── ÉTAPE 1 : Cache Supabase ────────────────────────────────────────────
+  // ─── ÉTAPE 1 : Cache Supabase (URLs connues) ──────────────────────────────
 
   if (!forceRefresh) {
     const cachedResults = await checkCache(product.ean, ttlHours);
@@ -69,32 +70,27 @@ export async function runSearch(
       stats.sources_tried.push("cache");
       stats.sources_success.push("cache");
     }
-
-    const staleResults = await getStaleResults(product.ean);
-    if (staleResults.length > 0) {
-      const withStaleSource = staleResults.map(r => ({ ...r, source: "cache" as const }));
-      emit({ type: "cache_hit", results: withStaleSource, source: "cache" });
-    }
   }
 
-  // ─── ÉTAPE 2 : Génération des requêtes (Normalisation incluse) ───────────
+  // ─── ÉTAPE 2 : Découverte DuckDuckGo (Nouveaux Liens) ──────────────────────
   
   const requetes = buildSearchQueries(product);
-  console.log(`[PIPELINE] Requêtes générées : ${requetes.length}`);
-  requetes.forEach(q => console.log(`  -> [${q.type}] ${q.query}`));
-
-  // ─── ÉTAPE 3 : Recherche Live via DuckDuckGo ─────────────────────────────
-  
-  // On priorise la recherche par EAN pour la découverte initiale
   const requeteEAN = requetes.find(q => q.type === "ean")?.query || product.ean;
+
+  console.log(`[PIPELINE] Découverte pour EAN : ${product.ean}`);
 
   for (const site of MARCHANDS_CIBLES) {
     const sourceId = `ddg_${site.split('.')[0]}`;
+    
+    // Si on a déjà ce site en cache, on peut ignorer la recherche DDG (optionnel)
+    if (allResults.some(r => r.enseigne.toLowerCase().includes(site.split('.')[0]))) {
+      continue;
+    }
+
     emit({ type: "source_start", source: sourceId, status: "running" });
     stats.sources_tried.push(sourceId);
 
     try {
-      // Tentative de découverte via DDG
       const resultat = await decouvrirProduitViaDDG(product, site, `${requeteEAN} site:${site}`);
       
       if (resultat) {
@@ -104,43 +100,29 @@ export async function runSearch(
         emit({ type: "source_result", source: sourceId, result: resultat });
         emit({ type: "source_end", source: sourceId, status: "success" });
       } else {
-        // Fallback optionnel : tenter avec une désignation normalisée si l'EAN n'a rien donné
-        const requeteDesig = requetes.find(q => q.type === "mixed")?.query;
-        if (requeteDesig) {
-          console.log(`[PIPELINE] Tentative fallback désignation pour ${site}...`);
-          const resultatFallback = await decouvrirProduitViaDDG(product, site, `${requeteDesig} site:${site}`);
-          if (resultatFallback) {
-            allResults.push(resultatFallback);
-            stats.from_scrapers++;
-            stats.sources_success.push(sourceId);
-            emit({ type: "source_result", source: sourceId, result: resultatFallback });
-            emit({ type: "source_end", source: sourceId, status: "success" });
-            continue;
-          }
-        }
         emit({ type: "source_end", source: sourceId, status: "not_found" });
       }
     } catch (err: any) {
-      console.log(`[PIPELINE] Erreur lors de la recherche ${site} : ${err.message}`);
+      console.error(`[PIPELINE] Erreur ${site} : ${err.message}`);
       emit({ type: "source_end", source: sourceId, status: "error" });
     }
   }
 
-  // ─── ÉTAPE 4 : Sauvegarde cache ──────────────────────────────────────────
+  // ─── ÉTAPE 3 : Sauvegarde Cache ───────────────────────────────────────────
 
   const liveResults = allResults.filter(r => r.source !== "cache");
   if (liveResults.length > 0) {
-    saveResults(product.ean, liveResults).catch(err => console.error("[PIPELINE] Erreur sauvegarde cache :", err.message));
+    saveResults(product.ean, liveResults).catch(err => console.error("[PIPELINE] Erreur cache :", err.message));
   }
 
-  // ─── ÉTAPE 5 : Fin ───────────────────────────────────────────────────────
+  // ─── ÉTAPE 4 : Fin ───────────────────────────────────────────────────────
 
   stats.total_results = allResults.length;
-  stats.with_price = allResults.filter(r => r.prix !== null).length;
-  stats.without_price = allResults.filter(r => r.prix === null).length;
+  stats.with_price = 0; // On ne détecte plus de prix
+  stats.without_price = allResults.length;
   stats.duration_ms = Date.now() - startTime;
 
-  console.log(`[PIPELINE] TERMINE | Total résultats : ${stats.total_results} | Durée : ${stats.duration_ms}ms`);
+  console.log(`[PIPELINE] TERMINE | Liens trouvés : ${stats.total_results}`);
   emit({ type: "done", results: allResults, stats });
   return { results: allResults, stats };
 }
@@ -161,10 +143,8 @@ export async function processScrapingQueue(
     reference_fabricant: productInfos?.reference_fabricant,
   };
 
-  const legacyEvents: unknown[] = [];
   const { results, stats } = await runSearch(product, {}, {
     onEvent: (event) => {
-      legacyEvents.push(event);
       if (!onProgress) return;
       if (event.type === "cache_hit") {
         event.results?.forEach(r => onProgress("scraper_result", { scraper: r.enseigne, status: "success", result: { ...r, isCached: true } }));
