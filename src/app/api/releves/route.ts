@@ -1,0 +1,73 @@
+import { NextRequest, NextResponse } from "next/server";
+import { supabase } from "@/lib/supabase";
+
+export const dynamic = "force-dynamic";
+
+/**
+ * GET /api/releves?ean=...
+ * Récupère l'historique des relevés manuels pour un produit donné.
+ */
+export async function GET(request: NextRequest) {
+  const { searchParams } = new URL(request.url);
+  const ean = searchParams.get("ean");
+
+  if (!ean) {
+    return NextResponse.json({ error: "Paramètre 'ean' manquant" }, { status: 400 });
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from("releves_prix")
+      .select("*")
+      .eq("ean", ean)
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    return NextResponse.json({ results: data });
+  } catch (err: any) {
+    return NextResponse.json({ error: err.message }, { status: 500 });
+  }
+}
+
+/**
+ * POST /api/releves
+ * Enregistre un nouveau relevé de prix manuel.
+ */
+export async function POST(request: NextRequest) {
+  try {
+    const body = await request.json();
+    const { ean, enseigne, url, prix_constate, designation_originale, designation_normalisee } = body;
+
+    if (!ean || !enseigne || !url || prix_constate === undefined) {
+      return NextResponse.json({ error: "Données manquantes" }, { status: 400 });
+    }
+
+    const { data, error } = await supabase
+      .from("releves_prix")
+      .insert([
+        {
+          ean,
+          enseigne,
+          url,
+          prix_constate: parseFloat(prix_constate),
+          designation_originale,
+          designation_normalisee,
+        },
+      ])
+      .select();
+
+    if (error) {
+      console.error("[API-RELEVES] Erreur Supabase :", error.message);
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    return NextResponse.json({ success: true, data });
+
+  } catch (err: any) {
+    console.error("[API-RELEVES] Erreur fatale :", err.message);
+    return NextResponse.json({ error: err.message }, { status: 500 });
+  }
+}

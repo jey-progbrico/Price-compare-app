@@ -12,7 +12,8 @@ export default async function ProduitsPage() {
   try {
     const { data, error } = await supabase
       .from("produits")
-      .select("numero_ean, description_produit, marque, prix_vente, devise")
+      .select("numero_ean, description_produit, marque, prix_vente, devise, groupe_produit")
+      .order("groupe_produit", { ascending: true })
       .order("numero_ean", { ascending: false })
       .range(0, 3000);
 

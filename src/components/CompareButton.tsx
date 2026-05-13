@@ -157,138 +157,152 @@ function PriceDisplay({ prix, prix_precedent, internalPrice }: {
   );
 }
 
-// ─── Carte résultat avec prix ─────────────────────────────────────────────────
+// ─── Carte de veille manuelle (Remplace LinkOnlyCard et PriceResultCard) ──────
 
-function PriceResultCard({ res, index, internalPrice }: {
+function ManualVeilleCard({ res, index, ean, internalPrice }: {
   res: SearchResult;
   index: number;
+  ean: string;
   internalPrice?: number | null;
 }) {
-  const prix = res.prix!;
+  // Initialiser avec le prix existant si présent (conversion string pour l'input)
+  const [prix, setPrix] = useState<string>(res.prix ? res.prix.toString() : "");
+  const [loading, setLoading] = useState(false);
+  const [saved, setSaved] = useState(false);
   const color = getEnseigneColor(res.enseigne);
 
-  return (
-    <a
-      href={res.lien}
-      target="_blank"
-      rel="noopener noreferrer"
-      style={{ animationDelay: `${index * 60}ms`, animationFillMode: "both" }}
-      className="group bg-[#0e0e0e] rounded-2xl p-3.5 border border-neutral-800/70
-                 flex gap-3 items-start
-                 hover:border-neutral-600 hover:bg-[#141414]
-                 transition-all duration-200
-                 animate-in fade-in slide-in-from-bottom-2"
-    >
-      {/* Logo enseigne */}
-      <div
-        className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 text-lg font-black border"
-        style={{
-          backgroundColor: `${color}18`,
-          borderColor: `${color}35`,
-          color,
-        }}
-      >
-        {res.image_url ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={res.image_url}
-            alt={res.enseigne}
-            className="w-full h-full object-contain rounded-xl p-1"
-            onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
-          />
-        ) : (
-          res.enseigne.charAt(0)
-        )}
-      </div>
+  // Log d'affichage initial
+  if (res.prix) {
+    console.log(`[RELEVE DISPLAY DATA] ${res.enseigne}: ${res.prix}€`);
+  }
 
-      {/* Contenu */}
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 mb-0.5 flex-wrap">
-          <span className="text-[11px] font-bold uppercase tracking-wider" style={{ color }}>
-            {res.enseigne}
-          </span>
-          {res.prix_status === "manual" && (
-            <span className="text-[9px] bg-violet-900/40 text-violet-400 border border-violet-800/50 px-1.5 py-0.5 rounded-md font-bold uppercase tracking-wider flex items-center gap-1">
-              <PenLine className="w-2.5 h-2.5" />
-              Manuel
-            </span>
-          )}
-          {res.source === "cache" && (
-            <span className="text-[9px] bg-neutral-800 text-neutral-400 border border-neutral-700 px-1.5 py-0.5 rounded-md font-bold uppercase tracking-wider flex items-center gap-1">
-              <Database className="w-2.5 h-2.5" />
-              Cache
-            </span>
+  const handleSave = async () => {
+    if (!prix || isNaN(parseFloat(prix))) return;
+    const payload = {
+      ean,
+      enseigne: res.enseigne,
+      url: res.lien,
+      prix_constate: prix,
+      designation_originale: res.titre
+    };
+
+    console.log("[RELEVE SAVE PAYLOAD] Sending:", payload);
+
+    try {
+      const response = await fetch("/api/releves", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      if (response.ok) {
+        console.log(`[RELEVE SAVED] Succès pour ${res.enseigne} (${prix}€)`);
+        setSaved(true);
+        setTimeout(() => setSaved(false), 3000);
+      }
+    } catch (err) {
+      console.error("Erreur sauvegarde relevé:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+    const currentConcurrentPrice = parseFloat(prix);
+    const hasPrice = !isNaN(currentConcurrentPrice) && currentConcurrentPrice > 0;
+    const diff = internalPrice && hasPrice ? internalPrice - currentConcurrentPrice : null;
+    const isAligned = diff !== null && Math.abs(diff) < 0.5;
+
+    return (
+    <div
+      style={{ animationDelay: `${index * 50}ms`, animationFillMode: "both" }}
+      className="bg-[#0e0e0e] rounded-2xl p-4 border border-neutral-800/70
+                 animate-in fade-in slide-in-from-bottom-2 space-y-4"
+    >
+      {/* Positionnement Prix (Si prix saisi) */}
+      {hasPrice && internalPrice && (
+        <div className="animate-in zoom-in-95 duration-300">
+          {isAligned ? (
+            <div className="flex items-center gap-2 px-3 py-2 bg-yellow-500/10 border border-yellow-500/20 rounded-xl text-yellow-500 text-[11px] font-bold">
+              <div className="w-1.5 h-1.5 rounded-full bg-yellow-500 animate-pulse" />
+              Prix aligné (écart {Math.abs(diff!).toFixed(2)}€)
+            </div>
+          ) : diff! < 0 ? (
+            <div className="flex items-center gap-2 px-3 py-2 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-emerald-500 text-[11px] font-bold">
+              <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              🟢 {Math.abs(diff!).toFixed(2)}€ moins cher
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 px-3 py-2 bg-red-500/10 border border-red-500/20 rounded-xl text-red-500 text-[11px] font-bold">
+              <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
+              🔴 {Math.abs(diff!).toFixed(2)}€ plus cher
+            </div>
           )}
         </div>
-        <p className="text-white/80 text-xs leading-snug line-clamp-1 mb-0.5">
-          {res.titre || "Produit"}
-        </p>
-        <PriceDisplay prix={prix} prix_precedent={res.prix_precedent} internalPrice={internalPrice} />
-      </div>
-
-      <ExternalLink className="w-3.5 h-3.5 text-neutral-700 group-hover:text-neutral-400 transition-colors flex-shrink-0 mt-1" />
-    </a>
-  );
-}
-
-// ─── Carte lien sans prix ─────────────────────────────────────────────────────
-
-function LinkOnlyCard({ res, index, onAddPrice }: {
-  res: SearchResult;
-  index: number;
-  onAddPrice: (enseigne: string, lien: string, titre: string) => void;
-}) {
-  const color = getEnseigneColor(res.enseigne);
-
-  return (
-    <div
-      style={{ animationDelay: `${index * 60}ms`, animationFillMode: "both" }}
-      className="bg-[#0a0a0a] rounded-xl p-3 border border-neutral-800/40
-                 flex gap-3 items-center
-                 animate-in fade-in slide-in-from-bottom-2"
-    >
-      {/* Logo enseigne */}
-      <div
-        className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 text-sm font-black border opacity-70"
-        style={{
-          backgroundColor: `${color}10`,
-          borderColor: `${color}25`,
-          color,
-        }}
-      >
-        {res.enseigne.charAt(0)}
-      </div>
-
-      {/* Contenu */}
-      <div className="flex-1 min-w-0">
-        <span className="text-[11px] font-bold uppercase tracking-wider block" style={{ color }}>
-          {res.enseigne}
-        </span>
-        <span className="text-[10px] text-neutral-600 flex items-center gap-1 mt-0.5">
-          <Tag className="w-2.5 h-2.5" />
-          Prix non détecté automatiquement
-        </span>
-      </div>
-
-      {/* Actions */}
-      <div className="flex items-center gap-1.5 flex-shrink-0">
+      )}
+      {/* En-tête : Enseigne et Titre */}
+      <div className="flex gap-3 items-start">
+        <div
+          className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 text-sm font-black border"
+          style={{
+            backgroundColor: `${color}18`,
+            borderColor: `${color}35`,
+            color,
+          }}
+        >
+          {res.enseigne.charAt(0)}
+        </div>
+        <div className="flex-1 min-w-0">
+          <span className="text-[11px] font-bold uppercase tracking-wider block mb-0.5" style={{ color }}>
+            {res.enseigne}
+          </span>
+          <p className="text-white/80 text-xs leading-snug line-clamp-2">
+            {res.titre || "Produit"}
+          </p>
+        </div>
         <a
           href={res.lien}
           target="_blank"
           rel="noopener noreferrer"
-          title="Ouvrir le site"
-          className="p-1.5 bg-neutral-900 border border-neutral-800 rounded-lg text-neutral-500
-                     hover:text-white hover:border-neutral-700 transition-all"
+          className="p-2 bg-neutral-900 border border-neutral-800 rounded-xl text-neutral-500
+                     hover:text-white hover:border-neutral-700 transition-all flex-shrink-0"
         >
-          <ExternalLink className="w-3 h-3" />
+          <ExternalLink className="w-4 h-4" />
         </a>
+      </div>
+
+      {/* Zone d'action : Saisie du prix */}
+      <div className="flex items-center gap-2">
+        <div className="relative flex-1">
+          <input
+            type="number"
+            step="0.01"
+            placeholder="Prix constaté..."
+            value={prix}
+            onChange={(e) => setPrix(e.target.value)}
+            className="w-full bg-black border border-neutral-800 rounded-xl px-4 py-3 text-sm
+                       focus:border-red-600 focus:ring-1 focus:ring-red-600 outline-none
+                       transition-all text-white placeholder:text-neutral-700"
+          />
+          <div className="absolute right-4 top-1/2 -translate-y-1/2 text-neutral-600 text-xs font-bold">
+            €
+          </div>
+        </div>
+        
         <button
-          onClick={() => onAddPrice(res.enseigne, res.lien, res.titre)}
-          title="Ajouter le prix manuellement"
-          className="p-1.5 bg-neutral-900 border border-neutral-800 rounded-lg text-neutral-500
-                     hover:text-violet-400 hover:border-violet-800/60 transition-all"
+          onClick={handleSave}
+          disabled={loading || !prix}
+          className={`px-5 py-3 rounded-xl font-bold text-sm transition-all flex items-center gap-2
+                     ${saved 
+                       ? "bg-emerald-600 text-white" 
+                       : "bg-white text-black hover:bg-neutral-200 disabled:opacity-30 disabled:hover:bg-white"}`}
         >
-          <PenLine className="w-3 h-3" />
+          {loading ? (
+            <Loader2 className="w-4 h-4 animate-spin" />
+          ) : saved ? (
+            <CheckCircle2 className="w-4 h-4" />
+          ) : (
+            "Enregistrer"
+          )}
         </button>
       </div>
     </div>
@@ -302,378 +316,136 @@ export default function CompareButton({
   internalPrice,
   isUnknown,
   onManualPriceClick,
+  produit,
 }: {
   ean: string;
   internalPrice?: number | null;
   isUnknown: boolean;
   onManualPriceClick?: (enseigne: string, lien: string, titre: string) => void;
+  produit?: any;
 }) {
-  const [phase, setPhase] = useState<"idle" | "cache_check" | "searching" | "done">("cache_check");
+  const [phase, setPhase] = useState<"idle" | "cache_check" | "done">("cache_check");
   const [results, setResults] = useState<SearchResult[]>([]);
-  const [hasStale, setHasStale] = useState(false);
-  const [sources, setSources] = useState<SourceState[]>(
-    Object.entries(SOURCES_CONFIG).map(([id, c]) => ({
-      id,
-      label: c.label,
-      status: "pending" as SourceStatus,
-      count: 0,
-    }))
-  );
-  const [error, setError] = useState<string | null>(null);
-  const [showSources, setShowSources] = useState(false);
-  const [showLinksOnly, setShowLinksOnly] = useState(false);
-  const [clearing, setClearing] = useState(false);
-  const streamRef = useRef<EventSource | null>(null);
-
-  // ─── Initialisation : lecture cache au montage ──────────────────────────
+  const [releves, setReleves] = useState<any[]>([]);
+  
+  // ─── Initialisation : chargement des données ────────────────────────────
 
   useEffect(() => {
-    const checkInitialCache = async () => {
+    if (ean) {
+      localStorage.setItem("vigi_current_ean", ean);
+    }
+
+    const fetchData = async () => {
       setPhase("cache_check");
       try {
-        const res = await fetch(`/api/cache?ean=${encodeURIComponent(ean)}&stale=1`);
-        if (res.ok) {
-          const data = await res.json();
-          if (data.results && data.results.length > 0) {
-            setResults(data.results);
-            const anyStale = data.results.some((r: SearchResult) => r.isStale);
-            setHasStale(anyStale);
-          }
+        const [resCache, resReleves] = await Promise.all([
+          fetch(`/api/cache?ean=${encodeURIComponent(ean)}&stale=1`),
+          fetch(`/api/releves?ean=${encodeURIComponent(ean)}`)
+        ]);
+
+        if (resCache.ok) {
+          const data = await resCache.json();
+          if (data.results) setResults(data.results);
+        }
+
+        if (resReleves.ok) {
+          const data = await resReleves.json();
+          if (data.results) setReleves(data.results);
         }
       } catch (err) {
-        console.error("Erreur lecture cache initial:", err);
+        console.error("Erreur chargement données initiales:", err);
       } finally {
-        setPhase("idle");
+        setPhase("done");
       }
     };
 
-    checkInitialCache();
-
-    return () => {
-      if (streamRef.current) streamRef.current.close();
-    };
+    fetchData();
   }, [ean]);
 
-  // ─── Mise à jour d'une source ────────────────────────────────────────────
-
-  const updateSource = (sourceId: string, updates: Partial<SourceState>) => {
-    setSources(prev =>
-      prev.map(s => (s.id === sourceId ? { ...s, ...updates } : s))
-    );
-  };
-
-  // ─── Démarrage de la recherche SSE ──────────────────────────────────────
-
-  const startSearch = (force = false) => {
-    console.log(`[FRONTEND] STARTING LIVE SEARCH | EAN: ${ean} | Force: ${force}`);
-    setPhase("searching");
-    setError(null);
-    if (!force) {
-      setResults([]);
-      setHasStale(false);
-    }
-
-    setSources(prev => prev.map(s => ({ ...s, status: "pending", count: 0 })));
-
-    if (streamRef.current) {
-      console.log("[FRONTEND] Closing previous stream");
-      streamRef.current.close();
-    }
-
-    const url = `/api/search/stream?ean=${encodeURIComponent(ean)}${force ? "&force=1" : ""}`;
-    console.log(`[FRONTEND] OPENING EVENTSOURCE | URL: ${url}`);
-    
-    try {
-      const eventSource = new EventSource(url);
-      streamRef.current = eventSource;
-
-      eventSource.onopen = () => console.log("[FRONTEND] STREAM OPENED");
-
-      eventSource.addEventListener("cache_hit", (e: MessageEvent) => {
-        console.log("[FRONTEND] CACHE HIT received");
-        const event = JSON.parse(e.data);
-        if (event.results?.length > 0) {
-          setResults(event.results.map((r: SearchResult) => ({ ...r, source: "cache", isCached: true })));
-          setHasStale(false);
-          updateSource("cache", { status: "success", count: event.results.length });
-        }
-      });
-
-      eventSource.addEventListener("source_start", (e: MessageEvent) => {
-        const event = JSON.parse(e.data);
-        console.log(`[FRONTEND] SOURCE START: ${event.source}`);
-        if (event.source) updateSource(event.source, { status: "running" });
-      });
-
-      eventSource.addEventListener("source_result", (e: MessageEvent) => {
-        const event = JSON.parse(e.data);
-        if (event.result) {
-          console.log(`[FRONTEND] STREAM MESSAGE RECEIVED from ${event.result.enseigne}`);
-          setResults(prev => {
-            if (prev.some(r => r.enseigne === event.result.enseigne)) return prev;
-            return [...prev, event.result];
-          });
-          if (event.source) {
-            setSources(prev =>
-              prev.map(s => s.id === event.source ? { ...s, count: s.count + 1 } : s)
-            );
-          }
-        }
-      });
-
-      eventSource.addEventListener("source_end", (e: MessageEvent) => {
-        const event = JSON.parse(e.data);
-        console.log(`[FRONTEND] SOURCE END: ${event.source} | Status: ${event.status}`);
-        if (event.source) {
-          updateSource(event.source, { status: event.status as SourceStatus || "not_found" });
-        }
-      });
-
-      eventSource.addEventListener("done", () => {
-        console.log("[FRONTEND] STREAM CLOSED (done)");
-        setPhase("done");
-        eventSource.close();
-      });
-
-      eventSource.onmessage = (e: MessageEvent) => {
-        console.log("[RAW SSE MESSAGE]", e.data);
-      };
-
-      eventSource.addEventListener("debug", (e: MessageEvent) => {
-        console.log("[RAW SSE DEBUG EVENT]", e.data);
-        const event = JSON.parse(e.data);
-        console.log(`[BACKEND-DEBUG][${event.category}] ${event.message}`);
-      });
-
-      eventSource.addEventListener("error", (e: MessageEvent) => {
-        console.error("[FRONTEND] STREAM ERROR:", e);
-        let msg = "Erreur de connexion.";
-        try {
-          const data = JSON.parse((e as any).data);
-          if (data.message) msg = data.message;
-        } catch {}
-        setError(msg);
-        setPhase("done");
-        eventSource.close();
-      });
-    } catch (err: any) {
-      console.error("[FRONTEND] EventSource creation error:", err);
-      setError("Impossible d'initialiser la recherche en direct.");
-      setPhase("done");
-    }
-  };
-
-  // ─── Force refresh ────────────────────────────────────────────────────────
-
-  const handleForceRefresh = async () => {
-    setClearing(true);
-    try {
-      await fetch(`/api/cache/clear?ean=${encodeURIComponent(ean)}`, { method: "DELETE" });
-      startSearch(true);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setClearing(false);
-    }
-  };
-
-  // ─── Handler ajout prix manuel ────────────────────────────────────────────
-
-  const handleAddPrice = (enseigne: string, lien: string, titre: string) => {
-    if (onManualPriceClick) {
-      onManualPriceClick(enseigne, lien, titre);
-    }
-  };
-
-  // ─── Séparation résultats avec / sans prix ────────────────────────────────
-
-  const withPrice = results.filter(r => r.prix !== null && r.prix > 0)
-    .sort((a, b) => (a.prix ?? 0) - (b.prix ?? 0)); // Tri croissant par prix
-  const withoutPrice = results.filter(r => r.prix === null || r.prix === 0);
-
-  // ─── Dérivations UI ──────────────────────────────────────────────────────
-
-  const isSearching = phase === "searching";
-  const isDone = phase === "done";
-  const isIdle = phase === "idle";
-
-  // ─── Rendu ────────────────────────────────────────────────────────────────
+  const searchDesignation = `${produit?.description_produit || ""} ${produit?.marque || ""}`.trim();
 
   return (
-    <div className="w-full space-y-4">
+    <div className="w-full space-y-6">
 
-      {/* ── Erreur ──────────────────────────────────────────────────────── */}
-      {error && (
-        <div className="p-4 bg-red-950/30 border border-red-900/50 rounded-xl text-red-400 text-sm flex items-start gap-3">
-          <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
-          <span>{error}</span>
-        </div>
-      )}
+      {/* ── Actions de Recherche Google ────────────────────────────────────── */}
+      <div className="flex flex-col gap-3">
+        <a
+          href={`https://www.google.com/search?q=${encodeURIComponent(ean)}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="w-full bg-red-600 hover:bg-red-500 text-white font-black py-4 rounded-2xl 
+                     transition-all duration-200 flex items-center justify-center gap-3
+                     shadow-[0_4px_20px_rgba(220,38,38,0.3)] active:scale-[0.98]"
+        >
+          <Search className="w-5 h-5" />
+          RECHERCHE GOOGLE EAN
+        </a>
 
-      {/* Bouton de recherche — Forcé visible pour debug */}
-      <button
-        onClick={() => {
-          console.log("[FRONTEND] COMPARE BUTTON CLICKED");
-          startSearch(false);
-        }}
-        className="w-full bg-gradient-to-r from-red-600 to-red-500 hover:from-red-500 hover:to-red-400
-                   text-white font-bold py-4 rounded-2xl transition-all duration-200
-                   flex items-center justify-center gap-3
-                   shadow-[0_0_30px_rgba(220,38,38,0.35)]
-                   hover:shadow-[0_0_40px_rgba(220,38,38,0.5)]
-                   hover:scale-[1.01] active:scale-[0.99]
-                   disabled:opacity-50 disabled:cursor-not-allowed"
-        disabled={isSearching}
-      >
-        {isSearching ? <Loader2 className="w-5 h-5 animate-spin" /> : <Search className="w-5 h-5" />}
-        {results.length > 0 && !hasStale
-          ? "Actualiser les prix"
-          : "Rechercher les prix concurrents"}
-      </button>
+        <a
+          href={`https://www.google.com/search?q=${encodeURIComponent(searchDesignation)}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="w-full bg-neutral-900 border border-neutral-800 hover:border-red-600/50 
+                     text-white font-black py-4 rounded-2xl transition-all duration-200
+                     flex items-center justify-center gap-3 active:scale-[0.98]"
+        >
+          <Search className="w-5 h-5 text-red-600" />
+          RECHERCHE GOOGLE DÉSIGNATION
+        </a>
+      </div>
 
-      {/* ── Progression pendant la recherche ─────────────────────────────── */}
-      {isSearching && (
-        <div className="bg-neutral-950 border border-neutral-800/70 rounded-2xl p-4">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="text-sm font-bold text-white flex items-center gap-2">
-              <Loader2 className="w-4 h-4 text-red-500 animate-spin" />
-              Recherche en cours
-              {results.length > 0 && (
-                <span className="text-neutral-500 font-normal text-xs">
-                  — {results.length} marchand{results.length > 1 ? "s" : ""} trouvé{results.length > 1 ? "s" : ""}
-                </span>
-              )}
-            </h3>
-            <button
-              onClick={() => setShowSources(!showSources)}
-              className="text-neutral-500 hover:text-neutral-300 transition-colors"
-            >
-              {showSources ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-            </button>
+      {/* ── Relevés Manuels (Historique Terrain) ─────────────────────────── */}
+      {releves.length > 0 && (
+        <div className="space-y-3">
+          <div className="flex items-center gap-2 mb-1 px-1">
+            <h3 className="text-sm font-black text-emerald-500 uppercase tracking-wider">Relevés Terrain</h3>
+            <span className="text-[10px] bg-emerald-900/30 text-emerald-500 px-1.5 py-0.5 rounded-md border border-emerald-800/50 font-mono">
+              {releves.length}
+            </span>
           </div>
-
-          {showSources && (
-            <div className="flex flex-wrap gap-1.5">
-              {sources.map(s => (
-                <SourceBadge key={s.id} source={s.id} status={s.status} />
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* ── Skeletons si pas encore de résultats ─────────────────────────── */}
-      {isSearching && results.length === 0 && (
-        <div className="space-y-2.5">
-          <SkeletonCard />
-          <SkeletonCard />
-          <SkeletonCard />
-        </div>
-      )}
-
-      {/* ── Résultats avec prix ───────────────────────────────────────────── */}
-      {withPrice.length > 0 && (
-        <div>
-          <div className="flex items-center justify-between mb-2.5">
-            <div className="flex items-center gap-2">
-              <h3 className="text-sm font-bold text-white flex items-center gap-1.5">
-                <Tag className="w-3.5 h-3.5 text-emerald-400" />
-                Prix détectés
-              </h3>
-              <span className="text-xs text-neutral-500 font-medium">
-                {withPrice.length} marchand{withPrice.length > 1 ? "s" : ""}
-              </span>
-            </div>
-            {(isDone || (!isSearching && results.length > 0)) && (
-              <button
-                onClick={handleForceRefresh}
-                disabled={clearing || isSearching}
-                className="p-1.5 bg-neutral-900 border border-neutral-800 text-neutral-500
-                           hover:text-white hover:border-neutral-700 rounded-xl transition-all"
-                title="Forcer l'actualisation"
-              >
-                <RefreshCw className={`w-3.5 h-3.5 ${clearing ? "animate-spin" : ""}`} />
-              </button>
-            )}
-          </div>
-
-          <div className="space-y-2.5">
-            {withPrice.map((res, i) => (
-              <PriceResultCard
-                key={`${res.enseigne}-price`}
-                res={res}
+          
+          <div className="space-y-3">
+            {releves.map((rel, i) => (
+              <ManualVeilleCard
+                key={rel.id}
+                res={{
+                  enseigne: rel.enseigne,
+                  titre: rel.designation_originale,
+                  lien: rel.url,
+                  prix: rel.prix_constate,
+                  source: "releve_manuel"
+                }}
                 index={i}
+                ean={ean}
                 internalPrice={internalPrice}
               />
             ))}
           </div>
+          <div className="h-px bg-neutral-900 my-6" />
         </div>
       )}
 
-      {/* ── Résultats sans prix (liens seuls) ─────────────────────────────── */}
-      {withoutPrice.length > 0 && (
-        <div>
-          <button
-            onClick={() => setShowLinksOnly(!showLinksOnly)}
-            className="flex items-center gap-2 w-full mb-2 group"
-          >
-            <div className="flex items-center gap-1.5">
-              <Link2 className="w-3.5 h-3.5 text-neutral-500" />
-              <span className="text-xs font-semibold text-neutral-500 group-hover:text-neutral-400 transition-colors">
-                {withoutPrice.length} autre{withoutPrice.length > 1 ? "s" : ""} marchand{withoutPrice.length > 1 ? "s" : ""} — prix non détecté
-              </span>
-            </div>
-            {showLinksOnly
-              ? <ChevronUp className="w-3.5 h-3.5 text-neutral-600 ml-auto" />
-              : <ChevronDown className="w-3.5 h-3.5 text-neutral-600 ml-auto" />
-            }
-          </button>
-
-          {showLinksOnly && (
-            <div className="space-y-2">
-              {withoutPrice.map((res, i) => (
-                <LinkOnlyCard
-                  key={`${res.enseigne}-link`}
-                  res={res}
-                  index={i}
-                  onAddPrice={handleAddPrice}
-                />
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* ── Aucun résultat après recherche ─────────────────────────────── */}
-      {isDone && results.length === 0 && !isSearching && (
-        <div className="p-6 bg-neutral-950 rounded-2xl border border-neutral-800/50 text-center">
-          <AlertTriangle className="w-8 h-8 text-yellow-500/50 mx-auto mb-3" />
-          <p className="text-white text-sm font-semibold mb-1">Aucun marchand trouvé</p>
-          <p className="text-neutral-500 text-xs">
-            Essayez d&apos;actualiser ou vérifiez votre connexion.
-          </p>
-        </div>
-      )}
-
-      {/* ── Info résultats stale ─────────────────────────────────────────── */}
-      {isIdle && hasStale && results.length > 0 && (
-        <div className="flex items-start gap-2 p-3 bg-amber-950/20 border border-amber-900/30 rounded-xl text-xs text-amber-400">
-          <Clock className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
-          <span>Ces résultats sont anciens. Lancez une recherche pour les actualiser.</span>
-        </div>
-      )}
-
-      {/* ── Stats rapides (fin de recherche) ─────────────────────────────── */}
-      {isDone && results.length > 0 && (
-        <div className="flex items-center gap-1.5 text-[10px] text-neutral-600 flex-wrap">
-          <Zap className="w-3 h-3" />
-          <span>{withPrice.length} prix trouvés</span>
-          {withoutPrice.length > 0 && (
-            <>
-              <span>·</span>
-              <span>{withoutPrice.length} liens sans prix</span>
-            </>
-          )}
+      {/* ── Résultats de discovery (Cache existant) ────────────────────────── */}
+      {results.length > 0 && (
+        <div className="space-y-3">
+          <div className="flex items-center gap-2 mb-1 px-1">
+            <h3 className="text-sm font-bold text-white opacity-60">Liens suggérés (Historique web)</h3>
+            <span className="text-[10px] bg-neutral-800 text-neutral-500 px-1.5 py-0.5 rounded font-mono">
+              {results.length}
+            </span>
+          </div>
+          
+          <div className="space-y-3">
+            {results.map((res, i) => (
+              <ManualVeilleCard
+                key={res.lien}
+                res={res}
+                index={i}
+                ean={ean}
+                internalPrice={internalPrice}
+              />
+            ))}
+          </div>
         </div>
       )}
     </div>

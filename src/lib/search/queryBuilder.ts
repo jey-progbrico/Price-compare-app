@@ -20,7 +20,7 @@ function cleanText(text: string): string {
     .replace(/["'']/g, "");
 }
 
-function extractKeywords(designation: string, maxWords = 5): string {
+export function extractKeywords(designation: string, maxWords = 5): string {
   const stopWords = new Set([
     "le", "la", "les", "un", "une", "des", "de", "du", "en", "pour",
     "avec", "sans", "et", "ou", "à", "au", "aux", "par", "sur", "sous"

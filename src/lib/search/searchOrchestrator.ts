@@ -1,5 +1,5 @@
 import { checkCache, getStaleResults, saveResults } from "./cacheManager";
-import { decouvrirProduitViaDDG } from "./duckDuckGoEngine";
+import { decouvrirProduitsGlobale } from "./duckDuckGoEngine";
 import { buildSearchQueries } from "./queryBuilder";
 import type {
   SearchResult,
@@ -72,40 +72,32 @@ export async function runSearch(
     }
   }
 
-  // ─── ÉTAPE 2 : Découverte DuckDuckGo (Nouveaux Liens) ──────────────────────
+  // ─── ÉTAPE 2 : Découverte DuckDuckGo Globale (Nouveaux Liens) ─────────────
   
-  const requetes = buildSearchQueries(product);
-  const requeteEAN = requetes.find(q => q.type === "ean")?.query || product.ean;
+  emit({ type: "source_start", source: "duckduckgo", status: "running" });
+  stats.sources_tried.push("duckduckgo");
 
-  console.log(`[PIPELINE] Découverte pour EAN : ${product.ean}`);
-
-  for (const site of MARCHANDS_CIBLES) {
-    const sourceId = `ddg_${site.split('.')[0]}`;
+  try {
+    const nouveauxResultats = await decouvrirProduitsGlobale(product);
     
-    // Si on a déjà ce site en cache, on peut ignorer la recherche DDG (optionnel)
-    if (allResults.some(r => r.enseigne.toLowerCase().includes(site.split('.')[0]))) {
-      continue;
+    for (const resultat of nouveauxResultats) {
+      // Éviter les doublons avec le cache
+      if (allResults.some(r => r.lien === resultat.lien)) continue;
+
+      allResults.push(resultat);
+      stats.from_scrapers++;
+      emit({ type: "source_result", source: "duckduckgo", result: resultat });
     }
 
-    emit({ type: "source_start", source: sourceId, status: "running" });
-    stats.sources_tried.push(sourceId);
-
-    try {
-      const resultat = await decouvrirProduitViaDDG(product, site, `${requeteEAN} site:${site}`);
-      
-      if (resultat) {
-        allResults.push(resultat);
-        stats.from_scrapers++;
-        stats.sources_success.push(sourceId);
-        emit({ type: "source_result", source: sourceId, result: resultat });
-        emit({ type: "source_end", source: sourceId, status: "success" });
-      } else {
-        emit({ type: "source_end", source: sourceId, status: "not_found" });
-      }
-    } catch (err: any) {
-      console.error(`[PIPELINE] Erreur ${site} : ${err.message}`);
-      emit({ type: "source_end", source: sourceId, status: "error" });
+    if (nouveauxResultats.length > 0) {
+      stats.sources_success.push("duckduckgo");
+      emit({ type: "source_end", source: "duckduckgo", status: "success" });
+    } else {
+      emit({ type: "source_end", source: "duckduckgo", status: "not_found" });
     }
+  } catch (err: any) {
+    console.error(`[PIPELINE] Erreur DuckDuckGo : ${err.message}`);
+    emit({ type: "source_end", source: "duckduckgo", status: "error" });
   }
 
   // ─── ÉTAPE 3 : Sauvegarde Cache ───────────────────────────────────────────

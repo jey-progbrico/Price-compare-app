@@ -15,12 +15,28 @@ interface DdgOrganicResult {
 
 /**
  * Effectue une recherche sur DuckDuckGo HTML et extrait les résultats organiques.
+ * MOTEUR PARTAGÉ ET VALIDÉ (Utilisé par le pipeline et la route debug).
  */
-async function rechercherDuckDuckGo(requete: string): Promise<DdgOrganicResult[]> {
-  const urlRecherche = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(requete)}`;
+export async function rechercherDuckDuckGo(requete: string): Promise<DdgOrganicResult[]> {
+  const urlDdg = `https://html.duckduckgo.com/html/`;
+  
+  console.log(`[DDG SHARED ENGINE USED] Requête : "${requete}"`);
   
   try {
-    const response = await fetchStealth(urlRecherche);
+    const response = await fetch(urlDdg, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "fr-FR,fr;q=0.9",
+        "Cache-Control": "no-cache",
+        "Origin": "https://html.duckduckgo.com",
+        "Referer": "https://html.duckduckgo.com/",
+      },
+      body: `q=${encodeURIComponent(requete)}&b=`,
+    });
+
     const html = await response.text();
     const $ = cheerio.load(html);
     const resultats: DdgOrganicResult[] = [];
@@ -37,9 +53,16 @@ async function rechercherDuckDuckGo(requete: string): Promise<DdgOrganicResult[]
       }
     });
 
+    console.log(`[DDG RAW RESULTS COUNT: ${resultats.length}] pour "${requete}"`);
+    
+    // Log des 3 premiers résultats bruts pour inspection
+    resultats.slice(0, 3).forEach((r, i) => {
+      console.log(`  [RAW #${i+1}] ${r.title.substring(0, 30)}... | ${r.url}`);
+    });
+
     return resultats;
   } catch (err: any) {
-    console.error(`[DDG] Erreur de recherche : ${err.message}`);
+    console.error(`[DDG] Erreur de recherche POST : ${err.message}`);
     return [];
   }
 }
@@ -47,7 +70,7 @@ async function rechercherDuckDuckGo(requete: string): Promise<DdgOrganicResult[]
 /**
  * Extrait l'URL réelle du marchand à partir du lien de redirection DuckDuckGo.
  */
-function extraireUrlDdg(hrefDdg: string): string | null {
+export function extraireUrlDdg(hrefDdg: string): string | null {
   try {
     if (hrefDdg.startsWith('http')) {
       const urlObj = new URL(hrefDdg);
@@ -84,37 +107,62 @@ function estUnePageProduitValide(url: string): boolean {
   return proba.probability > 0.5;
 }
 
-/**
- * Découvre un produit sur un site spécifique via DuckDuckGo.
- * Retourne un SearchResult sans prix (prix: null).
- */
-export async function decouvrirProduitViaDDG(
-  produit: ProductInfo,
-  site: string,
-  requeteSpecifique?: string
-): Promise<SearchResult | null> {
-  const requete = requeteSpecifique || `${produit.ean} site:${site}`;
-  
-  console.log(`[DDG] Recherche : "${requete}"`);
-  
-  const resultatsDdg = await rechercherDuckDuckGo(requete);
-  
-  // On prend le premier résultat qui ressemble à une page produit
-  const candidat = resultatsDdg.find(r => estUnePageProduitValide(r.url));
+import { extractKeywords } from "./queryBuilder";
 
-  if (!candidat) {
-    return null;
+/**
+ * Déduit le nom de l'enseigne à partir de l'URL du résultat.
+ */
+function deduireEnseigneDepuisUrl(url: string): string {
+  try {
+    const domain = new URL(url).hostname.replace('www.', '');
+    const parts = domain.split('.');
+    let name = parts[0];
+    
+    // Cas particuliers
+    if (name === "leroymerlin") return "Leroy Merlin";
+    if (name === "bricodepot") return "Brico Dépôt";
+    if (name === "manomano") return "ManoMano";
+    if (name === "bricomarche") return "Bricomarché";
+    if (name === "castorama") return "Castorama";
+    if (name === "amazon") return "Amazon";
+    if (name === "bricoprive") return "Brico Privé";
+    
+    return name.charAt(0).toUpperCase() + name.slice(1);
+  } catch {
+    return "Marchand";
+  }
+}
+
+/**
+ * Découvre des produits via une recherche globale DuckDuckGo.
+ * Version ULTRA-SIMPLIFIÉE (basée sur /api/test-ddg).
+ */
+export async function decouvrirProduitsGlobale(
+  produit: ProductInfo
+): Promise<SearchResult[]> {
+  const ean = produit.ean;
+  if (!ean) return [];
+
+  // TENTATIVE : EAN Seul (suffisant dans 90% des cas e-commerce)
+  const resultatsDdg = await rechercherDuckDuckGo(ean);
+
+  const searchResults: SearchResult[] = [];
+
+  for (const r of resultatsDdg) {
+    // Déduction simple de l'enseigne
+    const enseigne = deduireEnseigneDepuisUrl(r.url);
+    
+    searchResults.push({
+      enseigne: enseigne,
+      titre: r.title,
+      prix: null,
+      prix_status: "not_found",
+      lien: r.url,
+      source: "scraper_duckduckgo" as ResultSource,
+      retrieved_at: new Date().toISOString()
+    });
   }
 
-  const nomEnseigne = site.split('.')[0].charAt(0).toUpperCase() + site.split('.')[0].slice(1);
-
-  return {
-    enseigne: nomEnseigne,
-    titre: candidat.title,
-    prix: null,
-    prix_status: "not_found",
-    lien: candidat.url,
-    source: "scraper_duckduckgo" as ResultSource,
-    retrieved_at: new Date().toISOString()
-  };
+  console.log(`[DDG MAIN ENGINE SUCCESS] ${searchResults.length} liens trouvés pour l'EAN ${ean}`);
+  return searchResults;
 }

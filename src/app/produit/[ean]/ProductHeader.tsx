@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Edit2 } from "lucide-react";
 import EditProductModal from "./EditProductModal";
@@ -13,14 +13,18 @@ interface Props {
 
 export default function ProductHeader({ ean, produit, isUnknown }: Props) {
   const [showEdit, setShowEdit] = useState(false);
+  const router = useRouter();
 
   return (
     <>
       {/* Top Bar */}
       <div className="flex items-center gap-4 mb-6">
-        <Link href="/" className="w-10 h-10 bg-neutral-900 rounded-full flex items-center justify-center text-neutral-400 hover:text-white transition-colors">
+        <button 
+          onClick={() => router.back()}
+          className="w-10 h-10 bg-neutral-900 rounded-full flex items-center justify-center text-neutral-400 hover:text-white transition-colors border border-neutral-800"
+        >
           <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
-        </Link>
+        </button>
         <div className="flex-1">
           <p className="text-xs text-neutral-500 font-mono tracking-wider">EAN: {ean}</p>
           <div className="flex items-center gap-3">
@@ -37,6 +41,11 @@ export default function ProductHeader({ ean, produit, isUnknown }: Props) {
               </button>
             )}
           </div>
+          {!isUnknown && produit.groupe_produit && (
+            <span className="inline-block mt-1 px-2 py-0.5 bg-blue-900/20 text-blue-400 text-[10px] font-bold uppercase tracking-widest rounded border border-blue-900/30">
+              {produit.groupe_produit}
+            </span>
+          )}
         </div>
       </div>
 

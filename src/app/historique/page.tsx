@@ -1,183 +1,137 @@
 import { supabase } from "@/lib/supabase";
-import { Clock } from "lucide-react";
-import HistoriqueClient, {
-  type ProduitHistorique,
-} from "./HistoriqueClient";
-import ToastContainer from "@/components/Toast";
+import { Zap, Package, Tag, Clock, ArrowRight } from "lucide-react";
+import Link from "next/link";
 
 export const dynamic = "force-dynamic";
-export const fetchCache = "force-no-store";
 
-/**
- * Récupère les produits avec leurs données de cache agrégées.
- * Join : produits ← cache_prix (1:N)
- */
-async function fetchHistorique(): Promise<{
-  produits: ProduitHistorique[];
-  error: string | null;
-}> {
-  try {
-    // ── 1. Récupérer tous les produits, created_at optionnel ───────────────
-    // On tente d'abord avec created_at (si la migration a été appliquée),
-    // sinon on replie sur un tri par numero_ean.
-    let rawProduits: any[] | null = null;
-    let prodError: any = null;
+async function getActivites() {
+  // 1. Charger les 15 derniers relevés
+  const { data: releves } = await supabase
+    .from("releves_prix")
+    .select("*, produits(description_produit, marque)")
+    .order("created_at", { ascending: false })
+    .limit(15);
 
-    const withDate = await supabase
-      .from("produits")
-      .select(
-        "numero_ean, description_produit, marque, prix_vente, devise, created_at"
-      )
-      .order("created_at", { ascending: false })
-      .limit(500);
+  // 2. Charger les 10 derniers produits
+  const { data: produits } = await supabase
+    .from("produits")
+    .select("*")
+    .order("updated_at", { ascending: false })
+    .limit(10);
 
-    if (withDate.error?.code === "42703") {
-      // Colonne created_at absente — migration pas encore appliquée
-      console.warn(
-        "[Historique] created_at absent sur produits — utilisez migration_historique.sql"
-      );
-      const fallback = await supabase
-        .from("produits")
-        .select(
-          "numero_ean, description_produit, marque, prix_vente, devise"
-        )
-        .order("numero_ean", { ascending: false })
-        .limit(500);
-      rawProduits = fallback.data;
-      prodError = fallback.error;
-    } else {
-      rawProduits = withDate.data;
-      prodError = withDate.error;
-    }
+  // 3. Fusionner et typer
+  const activites: any[] = [];
 
-    if (prodError) {
-      console.error("[Historique] Erreur fetch produits:", prodError);
-      return { produits: [], error: prodError.message };
-    }
-
-    if (!rawProduits || rawProduits.length === 0) {
-      return { produits: [], error: null };
-    }
-
-    // ── 2. Récupérer les données du cache pour tous ces EANs ───────────────
-    const eans = rawProduits.map((p) => p.numero_ean);
-
-    const { data: cacheData, error: cacheError } = await supabase
-      .from("cache_prix")
-      .select("ean, enseigne, prix, updated_at")
-      .in("ean", eans);
-
-    if (cacheError) {
-      // Non bloquant : on continue sans les données de cache
-      console.warn("[Historique] Avertissement fetch cache_prix:", cacheError.message);
-    }
-
-    // ── 3. Agréger les données de cache par EAN ────────────────────────────
-    type CacheEntry = { ean: string; enseigne: string; prix: number | null; updated_at: string };
-    
-    const cacheByEan = new Map<string, CacheEntry[]>();
-    if (cacheData) {
-      for (const row of cacheData as CacheEntry[]) {
-        if (!cacheByEan.has(row.ean)) cacheByEan.set(row.ean, []);
-        cacheByEan.get(row.ean)!.push(row);
-      }
-    }
-
-    // ── 4. Construire les objets ProduitHistorique ────────────────────────
-    const produits: ProduitHistorique[] = rawProduits.map((p) => {
-      const cacheEntries = cacheByEan.get(p.numero_ean) ?? [];
-
-      const enseignes = [
-        ...new Set(
-          cacheEntries
-            .filter((c) => c.enseigne)
-            .map((c) => c.enseigne)
-        ),
-      ];
-
-      const prixValides = cacheEntries
-        .map((c) => c.prix)
-        .filter((px): px is number => typeof px === "number" && px > 0);
-
-      const meilleur_prix_concurrent =
-        prixValides.length > 0 ? Math.min(...prixValides) : null;
-
-      const derniere_maj_cache =
-        cacheEntries.length > 0
-          ? cacheEntries.reduce((latest, c) =>
-              !latest.updated_at ||
-              new Date(c.updated_at) > new Date(latest.updated_at)
-                ? c
-                : latest
-            ).updated_at
-          : null;
-
-      return {
-        numero_ean: p.numero_ean,
-        description_produit: p.description_produit ?? null,
-        marque: p.marque ?? null,
-        prix_vente: p.prix_vente !== null && p.prix_vente !== undefined
-          ? Number(p.prix_vente)
-          : null,
-        devise: p.devise ?? "€",
-        created_at: p.created_at ?? null,
-        enseignes,
-        meilleur_prix_concurrent,
-        derniere_maj_cache,
-      };
+  releves?.forEach(r => {
+    activites.push({
+      id: `rel-${r.id}`,
+      type: "releve",
+      date: new Date(r.created_at),
+      ean: r.ean,
+      enseigne: r.enseigne,
+      prix: r.prix_constate,
+      titre: r.designation_originale || r.produits?.description_produit || "Produit",
+      marque: r.produits?.marque
     });
+  });
 
-    console.log(`[Historique] ✅ ${produits.length} produits chargés`);
-    return { produits, error: null };
+  produits?.forEach(p => {
+    activites.push({
+      id: `prod-${p.numero_ean}`,
+      type: "produit",
+      date: new Date(p.updated_at || p.created_at),
+      ean: p.numero_ean,
+      titre: p.description_produit,
+      marque: p.marque,
+      prix: p.prix_vente
+    });
+  });
 
-  } catch (err: any) {
-    console.error("[Historique] Exception inattendue:", err);
-    return {
-      produits: [],
-      error: err.message || "Erreur technique inattendue",
-    };
-  }
+  return activites.sort((a, b) => b.date.getTime() - a.date.getTime());
 }
 
-// ─── Page ─────────────────────────────────────────────────────────────────────
-
 export default async function HistoriquePage() {
-  const { produits, error } = await fetchHistorique();
+  const activites = await getActivites();
 
   return (
-    <div className="p-4 sm:p-6 min-h-screen flex flex-col pt-8 animate-in fade-in bg-[#0a0a0c]">
-      {/* ── En-tête ────────────────────────────────────────────────────── */}
-      <div className="flex items-center gap-3 mb-6">
-        <div className="w-10 h-10 bg-red-900/20 text-red-500 rounded-xl flex items-center justify-center flex-shrink-0">
-          <Clock className="w-5 h-5" />
+    <div className="p-4 sm:p-6 min-h-screen flex flex-col pt-8 animate-in fade-in bg-[#0a0a0c] pb-24">
+      <div className="flex items-center gap-3 mb-8">
+        <div className="w-10 h-10 bg-violet-600/20 text-violet-500 rounded-xl flex items-center justify-center">
+          <Zap className="w-5 h-5" />
         </div>
         <div>
-          <h1 className="text-2xl font-bold text-white leading-none">
-            Historique
-          </h1>
-          <p className="text-neutral-500 text-xs mt-0.5">
-            Produits scannés récemment
-          </p>
+          <h1 className="text-2xl font-bold text-white">Activités</h1>
+          <p className="text-neutral-500 text-xs mt-0.5">Suivi en temps réel du terrain</p>
         </div>
       </div>
 
-      {/* ── Erreur Supabase (non bloquant) ─────────────────────────────── */}
-      {error && (
-        <div className="mb-5 p-4 bg-red-950/40 border border-red-800/50 rounded-2xl">
-          <p className="text-red-400 text-xs font-semibold mb-1">
-            Impossible de charger l'historique
-          </p>
-          <p className="text-red-500/80 text-[11px] font-mono break-all">
-            {error}
-          </p>
-        </div>
-      )}
+      <div className="space-y-4">
+        {activites.map((act) => (
+          <Link 
+            key={act.id} 
+            href={`/produit/${act.ean}`}
+            className="block bg-neutral-900 border border-neutral-800 rounded-2xl p-4 hover:border-neutral-700 transition-all active:scale-[0.98]"
+          >
+            <div className="flex justify-between items-start mb-3">
+              <div className="flex items-center gap-2">
+                {act.type === "releve" ? (
+                  <div className="px-2 py-0.5 bg-emerald-900/30 text-emerald-500 text-[10px] font-bold rounded border border-emerald-800/50 uppercase tracking-widest">
+                    Nouveau Relevé
+                  </div>
+                ) : (
+                  <div className="px-2 py-0.5 bg-blue-900/30 text-blue-500 text-[10px] font-bold rounded border border-blue-800/50 uppercase tracking-widest">
+                    Fiche Modifiée
+                  </div>
+                )}
+                <span className="text-[10px] text-neutral-600 font-mono">
+                  {act.date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </span>
+              </div>
+              <span className="text-[10px] text-neutral-500 font-medium bg-black/40 px-1.5 py-0.5 rounded">
+                {act.date.toLocaleDateString()}
+              </span>
+            </div>
 
-      {/* ── Client interactif ──────────────────────────────────────────── */}
-      <HistoriqueClient initialProduits={produits} />
+            <div className="flex gap-4">
+              <div className={`w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 border ${
+                act.type === "releve" ? "bg-emerald-950/20 border-emerald-900/30 text-emerald-500" : "bg-blue-950/20 border-blue-900/30 text-blue-500"
+              }`}>
+                {act.type === "releve" ? <Tag className="w-6 h-6" /> : <Package className="w-6 h-6" />}
+              </div>
+              
+              <div className="flex-1 min-w-0">
+                <h4 className="text-white text-sm font-bold truncate">{act.titre}</h4>
+                <div className="flex items-center gap-2 mt-1">
+                  {act.marque && <span className="text-[10px] text-neutral-400 font-bold uppercase">{act.marque}</span>}
+                  <span className="text-[10px] text-neutral-600 font-mono">EAN: {act.ean}</span>
+                </div>
+              </div>
 
-      {/* ── Toast container (portal) ───────────────────────────────────── */}
-      <ToastContainer />
+              <div className="text-right flex-shrink-0">
+                <div className="text-lg font-black text-white leading-none">
+                  {act.prix?.toFixed(2)}€
+                </div>
+                <div className="text-[9px] font-bold uppercase tracking-tighter mt-1 text-neutral-500">
+                  {act.type === "releve" ? act.enseigne : "Mon Magasin"}
+                </div>
+              </div>
+            </div>
+            
+            <div className="mt-4 pt-3 border-t border-neutral-800/50 flex justify-end">
+              <div className="text-[10px] font-bold text-neutral-600 flex items-center gap-1">
+                VOIR LA FICHE <ArrowRight className="w-3 h-3" />
+              </div>
+            </div>
+          </Link>
+        ))}
+
+        {activites.length === 0 && (
+          <div className="text-center py-20 text-neutral-600">
+            <Clock className="w-12 h-12 mx-auto mb-4 opacity-20" />
+            <p>Aucune activité récente.</p>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

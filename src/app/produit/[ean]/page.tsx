@@ -19,7 +19,7 @@ export default async function ProductPage({
   // Fetch product from supabase
   const { data: produit, error } = await supabase
     .from("produits")
-    .select("description_produit, numero_ean, groupe_produit, marque, prix_vente, devise")
+    .select("description_produit, numero_ean, groupe_produit, marque, prix_vente, devise, reference_fabricant, categorie")
     .eq("numero_ean", ean)
     .single();
 
@@ -41,7 +41,11 @@ export default async function ProductPage({
         // - CompareButton (SSE)
         // - ManualPriceModal (saisie manuelle depuis les liens sans prix)
         // - Bouton "Ajouter un prix manuellement" (saisie directe)
-        <ProductSearchSection ean={ean} internalPrice={internalPrice} />
+        <ProductSearchSection 
+          ean={ean} 
+          internalPrice={internalPrice} 
+          produit={produit}
+        />
       )}
     </main>
   );

@@ -30,14 +30,18 @@ export default function EditProductModal({ produit, onClose }: Props) {
 
     const priceValue = parseFloat(prix.replace(',', '.'));
 
+    const payload = {
+      marque: marque || null,
+      description_produit: designation,
+      reference_fabricant: reference || null,
+      categorie: categorie || null,
+      prix_vente: isNaN(priceValue) ? null : priceValue,
+    };
+
+    console.log("[PRODUCT SAVE PAYLOAD] Update:", payload);
+
     try {
-      const { error } = await supabase.from("produits").update({
-        marque: marque || null,
-        description_produit: designation,
-        reference_fabricant: reference || null,
-        categorie: categorie || null,
-        prix_vente: isNaN(priceValue) ? null : priceValue,
-      }).eq("numero_ean", produit.numero_ean);
+      const { error } = await supabase.from("produits").update(payload).eq("numero_ean", produit.numero_ean);
 
       if (error) throw error;
       

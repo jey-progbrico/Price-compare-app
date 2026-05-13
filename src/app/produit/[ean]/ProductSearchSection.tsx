@@ -8,6 +8,7 @@ import { PenLine } from "lucide-react";
 interface ProductSearchSectionProps {
   ean: string;
   internalPrice?: number | null;
+  produit: any;
 }
 
 /**
@@ -15,7 +16,7 @@ interface ProductSearchSectionProps {
  * Gère le CompareButton (SSE) + la modale de saisie manuelle.
  * Client component car il a besoin de l'état React.
  */
-export default function ProductSearchSection({ ean, internalPrice }: ProductSearchSectionProps) {
+export default function ProductSearchSection({ ean, internalPrice, produit }: ProductSearchSectionProps) {
   const [modalOpen, setModalOpen] = useState(false);
   const [modalData, setModalData] = useState<{
     enseigne: string;
@@ -48,19 +49,7 @@ export default function ProductSearchSection({ ean, internalPrice }: ProductSear
 
   return (
     <div className="space-y-4">
-      {/* Bouton d'ajout manuel flottant */}
-      <div className="flex justify-end">
-        <button
-          onClick={openEmptyModal}
-          className="flex items-center gap-2 text-xs font-semibold text-neutral-500
-                     hover:text-violet-400 transition-colors px-3 py-1.5
-                     bg-neutral-900/60 border border-neutral-800/60 rounded-xl
-                     hover:border-violet-800/50"
-        >
-          <PenLine className="w-3.5 h-3.5" />
-          Ajouter un prix manuellement
-        </button>
-      </div>
+      {/* Composant de recherche principal */}
 
       {/* Composant de recherche principal */}
       <CompareButton
@@ -68,6 +57,7 @@ export default function ProductSearchSection({ ean, internalPrice }: ProductSear
         internalPrice={internalPrice}
         isUnknown={false}
         onManualPriceClick={handleManualPriceClick}
+        produit={produit}
       />
 
       {/* Modale saisie manuelle */}

@@ -22,16 +22,20 @@ export default function InitialProductForm({ ean }: Props) {
 
     const priceValue = parseFloat(prix.replace(',', '.'));
 
+    const payload = {
+      numero_ean: ean,
+      marque: marque || null,
+      description_produit: designation,
+      reference_fabricant: reference || null,
+      categorie: categorie || null,
+      prix_vente: isNaN(priceValue) ? null : priceValue,
+      devise: "€"
+    };
+
+    console.log("[PRODUCT SAVE PAYLOAD] Creation:", payload);
+
     try {
-      const { error } = await supabase.from("produits").insert({
-        numero_ean: ean,
-        marque: marque || null,
-        description_produit: designation,
-        reference_fabricant: reference || null,
-        categorie: categorie || null,
-        prix_vente: isNaN(priceValue) ? null : priceValue,
-        devise: "€"
-      });
+      const { error } = await supabase.from("produits").insert(payload);
       if (error) throw error;
       
       alert("Produit sauvegardé ! La recherche va commencer.");
