@@ -39,6 +39,13 @@ const ACTION_CONFIG: Record<string, { label: string, color: string, icon: any }>
   modification_produit: { label: "Fiche modifiée", color: "text-amber-500 bg-amber-500/10", icon: Edit3 },
 };
 
+const columns = [
+  { key: "type_action", label: "Action" },
+  { key: "ean", label: "Produit concerné" },
+  { key: "details", label: "Détails de l'opération" },
+  { key: "created_at", label: "Date & Heure", align: "right" as const },
+];
+
 export default function ActivitesPage() {
   const router = useRouter();
   const [activities, setActivities] = useState<Activity[]>([]);
