@@ -22,7 +22,8 @@ import {
   LogOut,
   Loader2,
   AlertCircle,
-  Info
+  Info,
+  Users
 } from "lucide-react";
 import ExportModal from "./ExportModal";
 import { createClient } from "@/lib/supabase/client";
@@ -429,6 +430,29 @@ export default function ParametresPage() {
                 <FileText className="w-5 h-5" />
               </div>
             </button>
+          </div>
+        </section>
+      )}
+
+      {isAdmin && (
+        <section className="space-y-3">
+          <div className="flex items-center gap-2 px-1">
+            <Shield className="w-4 h-4 text-red-500" />
+            <h2 className="text-xs font-black text-neutral-400 uppercase tracking-widest">Administration</h2>
+          </div>
+          <div className="bg-neutral-900 border border-neutral-800 rounded-3xl overflow-hidden shadow-xl group">
+            <Link 
+              href="/parametres/utilisateurs"
+              className="p-6 flex justify-between items-center hover:bg-red-950/10 transition-all"
+            >
+              <div className="text-left">
+                <div className="text-sm font-bold text-white group-hover:text-red-500 transition-colors">Gestion des Utilisateurs</div>
+                <div className="text-[10px] text-neutral-500 uppercase tracking-tighter mt-0.5">Administration de l'équipe et des rôles</div>
+              </div>
+              <div className="w-12 h-12 bg-red-600/10 rounded-2xl flex items-center justify-center text-red-500 group-hover:scale-110 transition-transform shadow-lg shadow-red-600/5">
+                <Users className="w-6 h-6" />
+              </div>
+            </Link>
           </div>
         </section>
       )}
