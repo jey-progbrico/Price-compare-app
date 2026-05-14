@@ -171,7 +171,7 @@ function ManualVeilleCard({ res, index, ean, internalPrice, releveId, onDelete }
   onDelete?: (id: string) => void;
 }) {
   // Initialiser avec le prix existant si présent (conversion string pour l'input)
-  const [prix, setPrix] = useState<string>(res.prix ? res.prix.toString() : "");
+  const [prix, setPrix] = useState<string>(res.prix != null ? res.prix.toString() : "");
   const [loading, setLoading] = useState(false);
   const [saved, setSaved] = useState(false);
   const color = getEnseigneColor(res.enseigne);

@@ -15,13 +15,10 @@ import {
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 
+import { Product } from "@/types/database";
+
 interface Props {
-  produit: {
-    numero_ean: string;
-    description_produit: string | null;
-    rayon?: string | null;
-    groupe_produit?: string | null;
-  };
+  produit: Product;
   onClose: () => void;
 }
 
@@ -120,17 +117,17 @@ export default function DeleteProductModal({ produit, onClose }: Props) {
             <div className="flex justify-between items-start">
               <div className="space-y-1">
                 <span className="text-[10px] font-black text-neutral-500 uppercase tracking-widest block">Désignation</span>
-                <h3 className="text-lg font-bold text-white line-clamp-2">{produit.description_produit}</h3>
+                <h3 className="text-lg font-bold text-white line-clamp-2">{produit?.description_produit}</h3>
               </div>
             </div>
             <div className="grid grid-cols-2 gap-4 pt-4 border-t border-white/5">
               <div>
                 <span className="text-[10px] font-black text-neutral-500 uppercase tracking-widest block mb-1">Code EAN</span>
-                <span className="text-xs font-mono font-bold text-neutral-300 bg-black/40 px-2 py-1 rounded border border-white/5">{produit.numero_ean}</span>
+                <span className="text-xs font-mono font-bold text-neutral-300 bg-black/40 px-2 py-1 rounded border border-white/5">{produit?.numero_ean}</span>
               </div>
               <div>
                 <span className="text-[10px] font-black text-neutral-500 uppercase tracking-widest block mb-1">Rayon</span>
-                <span className="text-xs font-bold text-neutral-300">{produit.rayon || "Non classé"}</span>
+                <span className="text-xs font-bold text-neutral-300">{produit?.rayon || "Non classé"}</span>
               </div>
             </div>
           </div>

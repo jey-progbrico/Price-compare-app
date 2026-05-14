@@ -33,7 +33,7 @@ export default function ProductHeader({ ean, produit, isUnknown }: Props) {
           <p className="text-xs text-neutral-500 font-mono tracking-wider">EAN: {ean}</p>
           <div className="flex items-center gap-3">
             <h1 className="text-lg font-bold truncate">
-              {isUnknown ? "Produit non référencé" : (produit.description_produit || "Produit sans description")}
+              {isUnknown ? "Produit non référencé" : (produit?.description_produit || "Produit sans description")}
             </h1>
             {!isUnknown && (
               <button 
@@ -46,14 +46,14 @@ export default function ProductHeader({ ean, produit, isUnknown }: Props) {
             )}
           </div>
           <div className="flex items-center gap-2 mt-1">
-            {!isUnknown && produit.groupe_produit && (
+            {!isUnknown && produit?.groupe_produit && (
               <span className="px-2 py-0.5 bg-blue-900/20 text-blue-400 text-[10px] font-bold uppercase tracking-widest rounded border border-blue-900/30">
-                {produit.groupe_produit}
+                {produit?.groupe_produit}
               </span>
             )}
-            {!isUnknown && produit.rayon && (
+            {!isUnknown && produit?.rayon && (
               <span className="px-2 py-0.5 bg-neutral-800 text-neutral-400 text-[10px] font-bold uppercase tracking-widest rounded border border-neutral-700">
-                Rayon : {produit.rayon}
+                Rayon : {produit?.rayon}
               </span>
             )}
           </div>
@@ -79,15 +79,15 @@ export default function ProductHeader({ ean, produit, isUnknown }: Props) {
             <span className="text-sm text-neutral-400">Prix inconnu</span>
           ) : (
             <div className="flex items-baseline gap-1">
-              <span className="text-3xl font-black text-white">{Number(produit.prix_vente || 0).toFixed(2)}</span>
-              <span className="text-red-500 font-bold">{produit.devise || "€"}</span>
+              <span className="text-3xl font-black text-white">{Number(produit?.prix_vente || 0).toFixed(2)}</span>
+              <span className="text-red-500 font-bold">{produit?.devise || "€"}</span>
             </div>
           )}
         </div>
-        {!isUnknown && produit.marque && (
+        {!isUnknown && produit?.marque && (
           <div className="text-right">
             <span className="text-xs text-neutral-500 block mb-1">Marque</span>
-            <span className="text-sm font-bold text-white bg-black/50 px-2 py-1 rounded-lg">{produit.marque}</span>
+            <span className="text-sm font-bold text-white bg-black/50 px-2 py-1 rounded-lg">{produit?.marque}</span>
           </div>
         )}
       </div>
