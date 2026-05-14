@@ -38,19 +38,41 @@ export default async function Home() {
   const totalRayons = new Set(rawRayons?.map(r => r.rayon)).size;
   const totalConcurrents = new Set(rawConcurrents?.map(c => c.enseigne)).size;
 
-  // 2. Historique pour le mobile (on garde la logique précédente)
+  // 2. Historique pour le mobile (reprise rapide)
   const { data: recents } = await supabase
     .from("cache_prix")
     .select("ean, titre, prix, enseigne, updated_at")
     .order("updated_at", { ascending: false })
-    .limit(5);
+    .limit(10);
   
-  const uniqueRecents = Array.from(new Map(recents?.map(item => [item.ean, item]) || []).values()).slice(0, 3);
+  const uniqueRecents = Array.from(new Map(recents?.map(item => [item.ean, item]) || []).values()).slice(0, 5);
+
+  // 3. Récupérer le rôle de l'utilisateur
+  const { data: { user } } = await supabase.auth.getUser();
+  
+  let profile = null;
+  if (user?.id) {
+    const { data: profileData } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", user.id)
+      .single();
+    profile = profileData;
+  }
+
+  const isAdmin = profile?.role === 'admin';
+
+  // 4. Alertes Support (pour badge mobile)
+  const { data: convs } = await supabase
+    .from("support_conversations")
+    .select("unread_count_admin, unread_count_user");
+  
+  const unreadCount = convs?.reduce((acc, c) => acc + (c.unread_count_admin || 0) + (c.unread_count_user || 0), 0) || 0;
 
   return (
-    <main className="min-h-full bg-[#0a0a0c]">
+    <main className="min-h-full bg-[#0a0a0c] selection:bg-red-500/30">
       {/* ---------------------------------------------------------
-          VIEW DESKTOP (lg+)
+          VIEW DESKTOP (lg+) - INCHANGÉE
       --------------------------------------------------------- */}
       <div className="hidden lg:flex flex-col p-12 space-y-12 animate-in fade-in duration-700">
         <header>
@@ -109,63 +131,163 @@ export default async function Home() {
       </div>
 
       {/* ---------------------------------------------------------
-          VIEW MOBILE (Default)
+          VIEW MOBILE (Terrain Action Center)
       --------------------------------------------------------- */}
-      <div className="lg:hidden p-4 sm:p-6 flex flex-col min-h-screen pb-24">
-        <header className="mb-8 pt-4">
-          <h1 className="text-3xl font-black tracking-tight text-white flex items-center gap-2 uppercase">
-            Vigi<span className="text-red-600">prix</span>
-          </h1>
-          <p className="text-neutral-500 text-[10px] font-bold uppercase tracking-[0.2em] mt-1">Veille concurrentielle terrain</p>
+      <div className="lg:hidden flex flex-col min-h-screen bg-[#070708]">
+        {/* Top Header - Mobile Center */}
+        <header className="px-6 pt-8 pb-4 flex justify-between items-center bg-gradient-to-b from-black/50 to-transparent sticky top-0 z-30 backdrop-blur-md">
+          <div>
+            <h1 className="text-2xl font-black tracking-tight text-white uppercase">Vigi<span className="text-red-600">prix</span></h1>
+            <p className="text-[8px] font-black text-neutral-600 uppercase tracking-[0.4em] mt-1">Action Terrain v2</p>
+          </div>
+          <div className="relative">
+            <div className="w-10 h-10 rounded-2xl bg-neutral-900 border border-neutral-800 flex items-center justify-center">
+              <Activity className="w-5 h-5 text-neutral-500" />
+            </div>
+            {unreadCount > 0 && (
+              <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-600 border-2 border-black rounded-full flex items-center justify-center text-[8px] font-black text-white">
+                {unreadCount}
+              </span>
+            )}
+          </div>
         </header>
 
-        <Link href="/produits" className="bg-neutral-900 border border-neutral-800 rounded-2xl p-4 flex items-center gap-3 mb-8 hover:bg-neutral-800 transition-colors shadow-xl">
-          <Search className="w-6 h-6 text-neutral-600" />
-          <span className="text-neutral-500 text-base font-bold uppercase tracking-tight">Chercher un produit...</span>
-        </Link>
+        <div className="flex-1 px-6 pb-24 space-y-10">
+          
+          {/* ALERTES IMPORTANTES */}
+          {unreadCount > 0 && (
+            <Link href="/support" className="flex items-center gap-4 p-4 bg-red-600/10 border border-red-600/20 rounded-2xl animate-pulse">
+              <div className="w-10 h-10 rounded-xl bg-red-600 flex items-center justify-center shrink-0">
+                <Tag className="w-5 h-5 text-white" />
+              </div>
+              <div className="flex-1">
+                <p className="text-[10px] font-black text-red-500 uppercase tracking-widest">Nouveau message support</p>
+                <p className="text-xs font-bold text-white">L'administrateur a répondu à votre demande.</p>
+              </div>
+            </Link>
+          )}
 
-        <div className="flex-1 flex flex-col items-center justify-center min-h-[300px] bg-gradient-to-b from-red-900/10 to-transparent rounded-[3rem] border border-red-900/20 mb-10 relative overflow-hidden group">
-          <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-5 mix-blend-overlay pointer-events-none"></div>
-          <div className="relative z-10 flex flex-col items-center text-center">
-            <div className="w-24 h-24 bg-red-600 rounded-full flex items-center justify-center mb-6 shadow-[0_0_60px_rgba(220,38,38,0.4)]">
-              <ScanBarcode className="w-12 h-12 text-white" />
+          {/* ACTIONS RAPIDES - GRILLE TACTILE */}
+          <section className="space-y-4">
+            <h2 className="text-[10px] font-black text-neutral-600 uppercase tracking-[0.3em] px-1">Centre d'action</h2>
+            <div className="grid grid-cols-2 gap-4">
+              <MobileActionBtn 
+                href="/produits" 
+                icon={<ScanBarcode className="w-7 h-7 text-white" />} 
+                label="Scanner" 
+                sub="Code-barres" 
+                color="bg-red-600" 
+                main
+              />
+              <MobileActionBtn 
+                href="/produits" 
+                icon={<Search className="w-6 h-6 text-neutral-400" />} 
+                label="Chercher" 
+                sub="Catalogue" 
+              />
+              <MobileActionBtn 
+                href={isAdmin ? "/import-produits" : "/produits?create=true"} 
+                icon={<Plus className="w-6 h-6 text-neutral-400" />} 
+                label="Nouveau" 
+                sub={isAdmin ? "Import Excel" : "Produit rapide"} 
+              />
+              <MobileActionBtn 
+                href={isAdmin ? "/support" : "?support=open"} 
+                icon={<Activity className="w-6 h-6 text-neutral-400" />} 
+                label="Support" 
+                sub={isAdmin ? "Dashboard" : "Chat direct"} 
+              />
             </div>
-            <h2 className="text-2xl font-black text-white mb-2 uppercase tracking-tight">Scanner un produit</h2>
-            <p className="text-neutral-500 px-8 text-xs font-bold uppercase tracking-wide leading-relaxed">
-              Détectez immédiatement les prix concurrents en magasin.
-            </p>
-          </div>
-          <p className="mt-8 text-[10px] font-black text-red-500 uppercase tracking-[0.3em] animate-pulse">↓ Bouton Central ↓</p>
+          </section>
+
+          {/* REPRENDRE RAPIDEMENT */}
+          <section className="space-y-4">
+            <div className="flex justify-between items-end px-1">
+              <h2 className="text-[10px] font-black text-neutral-600 uppercase tracking-[0.3em]">Reprendre</h2>
+              <Link href="/historique" className="text-[10px] font-black text-red-500 uppercase tracking-widest">Voir tout</Link>
+            </div>
+            
+            <div className="flex overflow-x-auto gap-4 scrollbar-hide pb-2 -mx-6 px-6">
+              {uniqueRecents.map((item, i) => (
+                <Link key={i} href={`/produit/${item.ean}`} className="w-64 bg-neutral-900/50 border border-neutral-800 rounded-3xl p-5 shrink-0 flex flex-col gap-3 group active:scale-95 transition-all">
+                  <div className="flex justify-between items-start">
+                    <div className="w-10 h-10 rounded-2xl bg-black border border-neutral-800 flex items-center justify-center">
+                      <Package className="w-5 h-5 text-neutral-600" />
+                    </div>
+                    <span className="text-white font-black text-lg">{item.prix}€</span>
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-black text-white uppercase tracking-tight truncate">{item.titre}</h4>
+                    <p className="text-[9px] font-black text-neutral-600 uppercase tracking-widest truncate mt-1">{item.enseigne}</p>
+                  </div>
+                </Link>
+              ))}
+              {uniqueRecents.length === 0 && (
+                <div className="w-full py-12 text-center border-2 border-dashed border-neutral-900 rounded-[2.5rem]">
+                  <p className="text-[10px] font-black text-neutral-700 uppercase tracking-widest">Aucun produit récent</p>
+                </div>
+              )}
+            </div>
+          </section>
+
+          {/* ACTIVITÉ TERRAIN */}
+          <section className="space-y-4">
+            <h2 className="text-[10px] font-black text-neutral-600 uppercase tracking-[0.3em] px-1">Activité Terrain</h2>
+            <div className="bg-neutral-900/30 border border-neutral-800 rounded-[2.5rem] p-6 space-y-6">
+              {activities?.slice(0, 4).map((act, i) => (
+                <div key={i} className="flex items-center gap-4">
+                  <div className="w-8 h-8 rounded-xl bg-black border border-neutral-800 flex items-center justify-center shrink-0">
+                    {act.type_action === 'import_produit' ? <Plus className="w-3 h-3 text-red-500" /> : <Tag className="w-3 h-3 text-neutral-600" />}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[11px] font-black text-white uppercase tracking-tight truncate leading-none mb-1">
+                      {act.type_action.replace(/_/g, ' ')}
+                    </p>
+                    <p className="text-[8px] font-black text-neutral-600 uppercase tracking-widest">
+                      {new Date(act.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} • {act.ean || 'Système'}
+                    </p>
+                  </div>
+                  <ChevronRight className="w-3 h-3 text-neutral-800" />
+                </div>
+              ))}
+            </div>
+          </section>
         </div>
 
-        {/* Scans récents Mobile */}
-        <div className="space-y-4">
-          <div className="flex justify-between items-end px-1">
-            <h3 className="text-sm font-black text-white uppercase tracking-widest flex items-center gap-2">
-              <Clock className="w-4 h-4 text-red-600" /> Récents
-            </h3>
-            <Link href="/historique" className="text-[10px] font-black text-red-500 uppercase tracking-widest">Voir tout</Link>
-          </div>
-          
-          <div className="flex flex-col gap-3">
-            {uniqueRecents.map((item, i) => (
-              <Link key={i} href={`/produit/${item.ean}`} className="bg-neutral-900 border border-neutral-800 rounded-2xl p-4 flex gap-4 items-center shadow-lg">
-                <div className="w-10 h-10 bg-black rounded-xl border border-neutral-800 flex items-center justify-center shrink-0">
-                  <Package className="w-5 h-5 text-neutral-700" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <h4 className="text-white text-sm font-bold truncate uppercase tracking-tight">{item.titre}</h4>
-                  <p className="text-[9px] font-mono text-neutral-600 truncate uppercase mt-0.5">{item.enseigne}</p>
-                </div>
-                <div className="text-right shrink-0">
-                  <span className="text-white font-black block text-sm">{item.prix}€</span>
-                </div>
-              </Link>
-            ))}
-          </div>
+        {/* Bouton de Scan Flottant Principal */}
+        <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-40 lg:hidden">
+          <Link href="/produits" className="w-16 h-16 bg-red-600 rounded-[2rem] flex items-center justify-center text-white shadow-[0_20px_50px_rgba(220,38,38,0.3)] border-4 border-black active:scale-90 transition-all">
+            <ScanBarcode className="w-8 h-8" />
+          </Link>
         </div>
       </div>
     </main>
+  );
+}
+
+// ---------------------------------------------------------
+// COMPONENTS
+// ---------------------------------------------------------
+
+function MobileActionBtn({ href, icon, label, sub, color = "bg-neutral-900/50", main = false }: any) {
+  return (
+    <Link href={href} className={`${color} border border-white/5 rounded-[2.2rem] p-6 flex flex-col gap-3 group active:scale-95 transition-all shadow-xl`}>
+      <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${main ? "bg-white/20" : "bg-black/40 border border-white/5"}`}>
+        {icon}
+      </div>
+      <div>
+        <p className={`text-sm font-black uppercase tracking-tight ${main ? "text-white" : "text-neutral-300"}`}>{label}</p>
+        <p className={`text-[9px] font-black uppercase tracking-widest ${main ? "text-red-100/60" : "text-neutral-600"}`}>{sub}</p>
+      </div>
+    </Link>
+  );
+}
+
+function ChevronRight(props: any) {
+  return (
+    <svg fill="none" stroke="currentColor" strokeWidth="3" viewBox="0 0 24 24" className={props.className}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+    </svg>
   );
 }
 

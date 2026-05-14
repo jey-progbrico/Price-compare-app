@@ -1,18 +1,26 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { supabase } from "@/lib/supabase";
-import { Package, ArrowRight, Plus, Search } from "lucide-react";
+import { Package, ArrowRight, Plus } from "lucide-react";
 import Link from "next/link";
 import CreateProductModal from "@/components/CreateProductModal";
+import { useSearchParams } from "next/navigation";
 
-export default function ProduitsPage() {
+function ProduitsPageContent() {
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const searchParams = useSearchParams();
   const [rayons, setRayons] = useState<{name: string, slug: string}[]>([]);
   const [loading, setLoading] = useState(true);
 
+  useEffect(() => {
+    if (searchParams.get("create") === "true") {
+      setShowCreateModal(true);
+    }
+  }, [searchParams]);
+
   // Fetch unique rayons on client side since we need state for the modal
-  useState(() => {
+  useEffect(() => {
     const fetchRayons = async () => {
       const { data } = await supabase
         .from("produits")
@@ -30,7 +38,7 @@ export default function ProduitsPage() {
       setLoading(false);
     };
     fetchRayons();
-  });
+  }, []);
 
   return (
     <main className="min-h-full bg-[#0a0a0c] p-4 sm:p-6 lg:p-12 pt-12 pb-24 space-y-10 animate-in fade-in">
@@ -40,10 +48,9 @@ export default function ProduitsPage() {
           <p className="text-sm text-neutral-500 font-medium uppercase tracking-widest">Gérez vos univers produits</p>
         </div>
 
-        {/* Action Desktop uniquement */}
         <button 
           onClick={() => setShowCreateModal(true)}
-          className="hidden lg:flex items-center gap-3 bg-red-600 hover:bg-red-500 text-white px-6 py-4 rounded-2xl font-black transition-all shadow-lg shadow-red-600/20 active:scale-95"
+          className="flex items-center gap-3 bg-red-600 hover:bg-red-500 text-white px-6 py-4 rounded-2xl font-black transition-all shadow-lg shadow-red-600/20 active:scale-95"
         >
           <Plus className="w-5 h-5" />
           NOUVEAU PRODUIT
@@ -57,7 +64,6 @@ export default function ProduitsPage() {
             href={`/rayon/${rayon.slug}`}
             className="group relative aspect-square lg:aspect-auto lg:h-32 bg-neutral-900 border border-neutral-800 rounded-3xl lg:rounded-2xl p-6 lg:p-4 flex flex-col justify-end overflow-hidden hover:border-red-600/50 transition-all active:scale-[0.98] shadow-xl"
           >
-            {/* Décoration de fond */}
             <div className="absolute top-0 right-0 p-4 lg:p-3 opacity-5 group-hover:opacity-10 transition-opacity">
               <Package className="w-16 h-16 lg:w-10 lg:h-10 text-white" />
             </div>
@@ -82,15 +88,21 @@ export default function ProduitsPage() {
         </div>
       )}
 
-      {/* Modal de création Desktop */}
       <CreateProductModal 
         isOpen={showCreateModal}
         onClose={() => setShowCreateModal(false)}
         onSuccess={() => {
-          // Recharger les rayons si besoin, ou juste laisser router.refresh() faire son travail
           setShowCreateModal(false);
         }}
       />
     </main>
+  );
+}
+
+export default function ProduitsPage() {
+  return (
+    <Suspense fallback={<div className="p-12 animate-pulse text-neutral-500 uppercase font-black text-xs">Chargement catalogue...</div>}>
+      <ProduitsPageContent />
+    </Suspense>
   );
 }

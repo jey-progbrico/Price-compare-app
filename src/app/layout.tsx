@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import { Suspense } from "react";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -72,7 +73,11 @@ export default async function RootLayout({
           <ToastContainer />
           
           {/* Support Bubble - Global */}
-          {user && <SupportBubble />}
+          {user && (
+            <Suspense fallback={null}>
+              <SupportBubble />
+            </Suspense>
+          )}
         </div>
       </body>
     </html>

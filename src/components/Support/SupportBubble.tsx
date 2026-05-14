@@ -8,11 +8,20 @@ import { useProfile } from "@/hooks/useProfile";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { SupportConversation, SupportMessage } from "@/types/support";
+import { useSearchParams } from "next/navigation";
 
 export default function SupportBubble() {
   const { profile } = useProfile();
+  const searchParams = useSearchParams();
   const [isOpen, setIsOpen] = useState(false);
   const [conversation, setConversation] = useState<SupportConversation | null>(null);
+  
+  // Ecoute du paramètre ?support=open
+  useEffect(() => {
+    if (searchParams.get("support") === "open") {
+      setIsOpen(true);
+    }
+  }, [searchParams]);
   const [messages, setMessages] = useState<SupportMessage[]>([]);
   const [newMessage, setNewMessage] = useState("");
   const [loading, setLoading] = useState(false);
