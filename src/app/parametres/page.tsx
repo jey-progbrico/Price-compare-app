@@ -105,8 +105,10 @@ export default function ParametresPage() {
 
     try {
       // 1. Vérifier l'ancien mot de passe (via re-login silencieux)
+      if (!profile?.email) throw new Error("Session utilisateur introuvable.");
+
       const { error: signInError } = await supabase.auth.signInWithPassword({
-        email: user.email,
+        email: profile.email,
         password: oldPassword,
       });
 
