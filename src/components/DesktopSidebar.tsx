@@ -21,7 +21,7 @@ import { useProfile } from "@/hooks/useProfile";
 
 export default function DesktopSidebar() {
   const pathname = usePathname();
-  const { isAdmin } = useProfile();
+  const { isAdmin, isAdherant } = useProfile();
   const [unreadCount, setUnreadCount] = useState(0);
   const supabase = createClient();
 
@@ -55,19 +55,36 @@ export default function DesktopSidebar() {
     };
   }, [isAdmin, supabase]);
 
-  const menuItems = [
+  const baseMenu = [
     { href: "/", label: "Dashboard", icon: LayoutDashboard },
     { href: "/produits", label: "Catalogue", icon: Package },
     { href: "/historique", label: "Historique", icon: History },
     { href: "/activites", label: "Activités", icon: Activity },
+  ];
+
+  const adminMenu = [
     { href: "/import-produits", label: "Import Excel", icon: FileSpreadsheet },
+    { href: "/support", label: "Support Admin", icon: MessageSquare },
+  ];
+
+  const adherantMenu = [
+    { href: "/import-produits", label: "Import Excel", icon: FileSpreadsheet },
+  ];
+
+  const settingsMenu = [
     { href: "/parametres", label: "Paramètres", icon: Settings },
   ];
 
-  // Ajouter le support pour les admins
-  const displayItems = isAdmin 
-    ? [...menuItems.slice(0, 5), { href: "/support", label: "Support Admin", icon: MessageSquare }, menuItems[5]]
-    : menuItems;
+  // Construction dynamique du menu selon le rôle
+  let displayItems = [...baseMenu];
+  
+  if (isAdmin) {
+    displayItems = [...displayItems, ...adminMenu];
+  } else if (isAdherant) {
+    displayItems = [...displayItems, ...adherantMenu];
+  }
+
+  displayItems = [...displayItems, ...settingsMenu];
 
   return (
     <aside className="hidden lg:flex flex-col w-72 bg-[#0d0d0f] border-r border-neutral-800/50 h-screen sticky top-0 z-50">

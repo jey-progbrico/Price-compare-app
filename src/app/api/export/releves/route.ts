@@ -1,11 +1,26 @@
 import { NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase";
+import { createClient } from "@/lib/supabase/server";
 import * as XLSX from "xlsx";
 import { enrichWithProducts } from "@/lib/data-utils";
 
 import { PriceLog } from "@/types/database";
 
 export async function GET(request: Request) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+
+  if (!user) {
+    return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
+  }
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", user.id)
+    .single();
+
+  const isStandardUser = profile?.role === "utilisateur";
+
   const { searchParams } = new URL(request.url);
   const dateStart = searchParams.get("dateStart");
   const dateEnd = searchParams.get("dateEnd");
@@ -19,6 +34,11 @@ export async function GET(request: Request) {
       .select("*")
       .order("created_at", { ascending: false });
 
+    // Sécurité par rôle : l'utilisateur standard ne voit que ses relevés
+    if (isStandardUser) {
+      relQuery = relQuery.eq("created_by", user.id);
+    }
+
     if (dateStart) relQuery = relQuery.gte("created_at", `${dateStart}T00:00:00`);
     if (dateEnd) relQuery = relQuery.lte("created_at", `${dateEnd}T23:59:59`);
     if (concurrent) relQuery = relQuery.ilike("enseigne", `%${concurrent}%`);
@@ -29,10 +49,18 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "Aucun relevé trouvé pour ces critères." }, { status: 404 });
     }
 
-    // 2. Enrichissement manuel via le helper centralisé
+    // 2. Récupération des profils pour l'identification "Créé par"
+    // On récupère tous les profils pour mapper les emails (plus simple et performant sur de petites équipes)
+    const { data: allProfiles } = await supabase
+      .from("profiles")
+      .select("id, email");
+    
+    const profileMap = new Map(allProfiles?.map(p => [p.id, p.email]) || []);
+
+    // 3. Enrichissement manuel via le helper centralisé
     const releves = await enrichWithProducts(rawReleves as PriceLog[]);
 
-    // 3. Filtrage par rayon et formatage
+    // 4. Filtrage par rayon et formatage
     const excelData = releves
       .filter(rel => {
         if (!rayon) return true;
@@ -43,6 +71,7 @@ export async function GET(request: Request) {
         const prixMagasin = Number(p?.prix_vente || 0);
         const prixConcurrent = Number(rel.prix_constate || 0);
         const ecart = prixConcurrent - prixMagasin;
+        const creatorEmail = rel.created_by ? profileMap.get(rel.created_by) : "N/A";
 
         return {
           "Date relevé": new Date(rel.created_at).toLocaleDateString("fr-FR"),
@@ -56,6 +85,7 @@ export async function GET(request: Request) {
           "Concurrent": rel.enseigne,
           "Prix concurrent (€)": prixConcurrent,
           "Écart prix (€)": Number(ecart.toFixed(2)),
+          "Créé par": creatorEmail || "N/A",
           "URL concurrent": rel.url || ""
         };
       });
@@ -71,7 +101,7 @@ export async function GET(request: Request) {
     // Style minimal : Largeur colonnes auto
     const colWidths = [
       { wch: 15 }, { wch: 15 }, { wch: 20 }, { wch: 40 }, { wch: 15 },
-      { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 50 }
+      { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 30 }, { wch: 50 }
     ];
     ws["!cols"] = colWidths;
 

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase";
+import { createClient } from "@/lib/supabase/server";
 
 import { PriceLog } from "@/types/database";
 
@@ -10,6 +10,7 @@ export const dynamic = "force-dynamic";
  * Récupère l'historique des relevés manuels pour un produit donné.
  */
 export async function GET(request: NextRequest) {
+  const supabase = await createClient();
   const { searchParams } = new URL(request.url);
   const ean = searchParams.get("ean");
 
@@ -39,6 +40,13 @@ export async function GET(request: NextRequest) {
  * Enregistre un nouveau relevé de prix manuel.
  */
 export async function POST(request: NextRequest) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+
+  if (!user) {
+    return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
+  }
+
   try {
     const body = await request.json();
     const { ean, enseigne, url, prix_constate, designation_originale, designation_normalisee, match_type } = body;
@@ -58,6 +66,7 @@ export async function POST(request: NextRequest) {
           designation_originale,
           designation_normalisee,
           match_type,
+          created_by: user.id
         },
       ])
       .select();
@@ -88,6 +97,7 @@ export async function DELETE(request: NextRequest) {
   }
 
   try {
+    const supabase = await createClient();
     const { error } = await supabase
       .from("releves_prix")
       .delete()

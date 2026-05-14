@@ -69,6 +69,10 @@ export default async function Home() {
   }
 
   const isAdmin = profile?.role === 'admin';
+  const isAdherant = profile?.role === 'adherant';
+  const isManager = profile?.role === 'manager';
+  const canImport = isAdmin || isAdherant;
+  const canExport = isAdmin || isAdherant || isManager;
 
   // 4. Alertes Support (pour badge mobile)
   const { data: convs } = await supabase
@@ -85,7 +89,7 @@ export default async function Home() {
       <div className="hidden lg:flex flex-col p-12 space-y-12 animate-in fade-in duration-700">
         <header>
           <h1 className="text-4xl font-black text-white tracking-tighter uppercase">Tableau de bord</h1>
-          <p className="text-neutral-500 font-medium uppercase tracking-[0.2em] text-xs mt-2">Pilotage & Intelligence Tarifaire</p>
+          <p className="text-neutral-500 font-medium uppercase tracking-[0.2em] text-xs mt-2">Pilotage & Intelligence Tarifaire ({profile?.role || 'utilisateur'})</p>
         </header>
 
         {/* Grille KPI */}
@@ -135,8 +139,8 @@ export default async function Home() {
             <h3 className="text-lg font-black text-white uppercase tracking-wider">Actions Rapides</h3>
             <div className="flex flex-col gap-3">
               <ActionLink href="/produits" icon={<Plus className="w-5 h-5" />} label="Créer un produit" sub="Ajout manuel catalogue" />
-              <ActionLink href="/import-produits" icon={<Upload className="w-5 h-5" />} label="Import Catalogue" sub="Fichier Excel / XLSX" />
-              <ActionLink href="/historique" icon={<FileSpreadsheet className="w-5 h-5" />} label="Export Relevés" sub="Génération rapports" />
+              {canImport && <ActionLink href="/import-produits" icon={<Upload className="w-5 h-5" />} label="Import Catalogue" sub="Fichier Excel / XLSX" />}
+              {canExport && <ActionLink href="/historique" icon={<FileSpreadsheet className="w-5 h-5" />} label="Export Relevés" sub="Génération rapports" />}
               <ActionLink href="/produits" icon={<Search className="w-5 h-5" />} label="Consulter Catalogue" sub="Navigation par rayons" />
             </div>
           </div>
@@ -205,16 +209,16 @@ export default async function Home() {
                 sub="Catalogue" 
               />
               <MobileActionBtn 
-                href={isAdmin ? "/import-produits" : "/produits?create=true"} 
+                href={canImport ? "/import-produits" : "/produits?create=true"} 
                 icon={<Plus className="w-6 h-6 text-neutral-400" />} 
                 label="Nouveau" 
-                sub={isAdmin ? "Import Excel" : "Produit rapide"} 
+                sub={canImport ? "Import Excel" : "Produit rapide"} 
               />
               <MobileActionBtn 
-                href={isAdmin ? "/support" : "?support=open"} 
+                href={isAdmin ? "/support" : "/parametres"} 
                 icon={<Activity className="w-6 h-6 text-neutral-400" />} 
-                label="Support" 
-                sub={isAdmin ? "Dashboard" : "Chat direct"} 
+                label={isAdmin ? "Support" : "Session"} 
+                sub={isAdmin ? "Dashboard" : "Mon compte"} 
               />
             </div>
           </section>

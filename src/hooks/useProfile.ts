@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 
-export type UserRole = "admin" | "user";
+export type UserRole = "admin" | "adherant" | "manager" | "utilisateur";
 
 export interface UserProfile {
   id: string;
@@ -49,10 +49,16 @@ export function useProfile() {
   }, [supabase]);
 
   const isAdmin = profile?.role === "admin";
+  const isAdherant = profile?.role === "adherant";
+  const isManager = profile?.role === "manager";
+  const isStandardUser = profile?.role === "utilisateur";
 
   return {
     profile,
     isAdmin,
+    isAdherant,
+    isManager,
+    isStandardUser,
     loading,
     error,
     refresh: async () => {

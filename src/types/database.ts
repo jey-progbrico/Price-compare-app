@@ -31,7 +31,7 @@ export interface Activity {
 export interface Profile {
   id: string;
   email: string | null;
-  role: "admin" | "user";
+  role: "admin" | "adherant" | "manager" | "utilisateur";
   created_at: string;
 }
 
@@ -58,6 +58,7 @@ export interface PriceLog {
   url: string | null;
   designation_originale: string | null;
   match_type?: "exact" | "equivalent" | null;
+  created_by?: string | null;
   created_at: string;
 }
 

@@ -15,9 +15,29 @@ import {
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
+import { useProfile } from "@/hooks/useProfile";
+import { useEffect } from "react";
 
 export default function ImportProduitsPage() {
   const router = useRouter();
+  const { profile, loading: profileLoading, isAdmin, isAdherant } = useProfile();
+  
+  useEffect(() => {
+    if (!profileLoading && !isAdmin && !isAdherant) {
+      router.push("/produits");
+    }
+  }, [profileLoading, isAdmin, isAdherant, router]);
+
+  if (profileLoading) {
+    return (
+      <div className="min-h-screen bg-[#0a0a0c] flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <Loader2 className="w-10 h-10 text-red-600 animate-spin" />
+          <p className="text-xs font-black text-neutral-500 uppercase tracking-widest">Vérification des accès...</p>
+        </div>
+      </div>
+    );
+  }
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<{ success: boolean; count?: number; error?: string; details?: string[] } | null>(null);
