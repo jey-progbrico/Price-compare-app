@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { 
   Package, 
   X, 
@@ -28,14 +29,17 @@ export default function EditProductModal({ produit, onClose }: Props) {
     reference_fabricant: produit.reference_fabricant || "",
     rayon: produit.rayon || "",
     groupe_produit: produit.groupe_produit || "",
-    prix_vente: produit.prix_vente ? produit.prix_vente.toString() : ""
+    prix_vente: produit.prix_vente ? produit.prix_vente.toString() : "",
+    code_interne: produit.code_interne || ""
   });
 
   const [loading, setLoading] = useState(false);
   const [rayons, setRayons] = useState<string[]>([]);
   const [groupes, setGroupes] = useState<string[]>([]);
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
+    setMounted(true);
     const fetchMeta = async () => {
       const { data } = await supabase.from("produits").select("rayon, groupe_produit");
       if (data) {
@@ -60,6 +64,7 @@ export default function EditProductModal({ produit, onClose }: Props) {
       rayon: formData.rayon || null,
       groupe_produit: formData.groupe_produit || null,
       prix_vente: isNaN(priceValue) ? null : priceValue,
+      code_interne: formData.code_interne || null,
       updated_at: new Date().toISOString()
     };
 
@@ -93,8 +98,10 @@ export default function EditProductModal({ produit, onClose }: Props) {
     }
   };
 
-  return (
-    <div className="fixed inset-0 z-[110] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/90 backdrop-blur-md animate-in fade-in duration-300">
+  if (!mounted) return null;
+
+  return createPortal(
+    <div className="fixed inset-0 z-[1000] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/90 backdrop-blur-md animate-in fade-in duration-300">
       <div className="bg-neutral-950 border-t sm:border border-neutral-800 rounded-t-[2.5rem] sm:rounded-[2.5rem] w-full max-w-xl overflow-hidden shadow-2xl animate-in slide-in-from-bottom-10 duration-500 max-h-[95vh] flex flex-col">
         {/* Header */}
         <div className="p-6 flex justify-between items-center border-b border-neutral-900 bg-neutral-950/50">
@@ -114,15 +121,31 @@ export default function EditProductModal({ produit, onClose }: Props) {
 
         {/* Formulaire */}
         <form onSubmit={handleSubmit} className="p-6 space-y-6 overflow-y-auto flex-1 custom-scrollbar">
-          {/* EAN (ReadOnly) */}
-          <div className="bg-neutral-900/50 border border-neutral-800 rounded-2xl p-3 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <Database className="w-4 h-4 text-neutral-600" />
-              <span className="text-[10px] font-black text-neutral-500 uppercase tracking-widest">Code EAN Unique</span>
+          {/* IDENTIFIANTS */}
+          <div className="grid grid-cols-2 gap-4">
+            <div className="bg-neutral-900/50 border border-neutral-800 rounded-2xl p-3 flex flex-col gap-1">
+              <div className="flex items-center gap-2">
+                <Tag className="w-3 h-3 text-neutral-600" />
+                <span className="text-[9px] font-black text-neutral-500 uppercase tracking-widest">EAN (Fixe)</span>
+              </div>
+              <span className="text-xs font-mono font-bold text-white tracking-tighter">
+                {produit.numero_ean}
+              </span>
             </div>
-            <span className="text-xs font-mono font-bold text-white tracking-tighter bg-black px-3 py-1 rounded-lg border border-neutral-800">
-              {produit.numero_ean}
-            </span>
+
+            <div className="bg-neutral-900/50 border border-neutral-800 rounded-2xl p-3 flex flex-col gap-1 focus-within:border-red-600 transition-all">
+              <div className="flex items-center gap-2">
+                <Database className="w-3 h-3 text-neutral-600" />
+                <span className="text-[9px] font-black text-neutral-500 uppercase tracking-widest">Code Interne</span>
+              </div>
+              <input
+                type="text"
+                value={formData.code_interne}
+                onChange={(e) => setFormData({...formData, code_interne: e.target.value})}
+                placeholder="Identifiant..."
+                className="bg-transparent border-none p-0 text-xs font-mono font-bold text-red-500 focus:ring-0 outline-none uppercase placeholder:text-neutral-800"
+              />
+            </div>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
@@ -243,6 +266,7 @@ export default function EditProductModal({ produit, onClose }: Props) {
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

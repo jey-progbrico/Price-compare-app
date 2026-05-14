@@ -20,7 +20,7 @@ export default async function ProductPage({
   // Fetch product from supabase
   const { data: produit, error } = await supabase
     .from("produits")
-    .select("description_produit, numero_ean, groupe_produit, marque, prix_vente, devise, reference_fabricant, categorie, rayon")
+    .select("description_produit, numero_ean, groupe_produit, marque, prix_vente, devise, reference_fabricant, categorie, rayon, code_interne")
     .eq("numero_ean", ean)
     .single();
 
@@ -55,6 +55,10 @@ export default async function ProductPage({
               <div className="space-y-4">
                 <div className="flex justify-between border-b border-neutral-800/30 pb-3">
                   <span className="text-xs text-neutral-500">Référence interne</span>
+                  <span className="text-xs font-mono font-bold text-red-500">{produit.code_interne || "N/A"}</span>
+                </div>
+                <div className="flex justify-between border-b border-neutral-800/30 pb-3">
+                  <span className="text-xs text-neutral-500">Réf. Fabricant</span>
                   <span className="text-xs font-mono font-bold">{produit.reference_fabricant || "N/A"}</span>
                 </div>
                 <div className="flex justify-between border-b border-neutral-800/30 pb-3">

@@ -14,6 +14,7 @@ export interface Product {
   devise: string | null;
   categorie: string | null;
   image_url: string | null;
+  code_interne: string | null;
   created_at?: string;
   updated_at?: string;
 }

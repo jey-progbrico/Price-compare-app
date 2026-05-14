@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 import { 
   X, 
   Save, 
@@ -9,7 +10,8 @@ import {
   Layers, 
   Loader2, 
   CheckCircle2,
-  AlertCircle
+  AlertCircle,
+  Database
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "@/lib/supabase";
@@ -28,6 +30,7 @@ export default function CreateProductModal({ isOpen, onClose, initialRayon, onSu
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [rayons, setRayons] = useState<string[]>([]);
+  const [mounted, setMounted] = useState(false);
   const firstInputRef = useRef<HTMLInputElement>(null);
 
   const [formData, setFormData] = useState({
@@ -36,10 +39,12 @@ export default function CreateProductModal({ isOpen, onClose, initialRayon, onSu
     marque: "",
     rayon: initialRayon || "",
     groupe_produit: "",
-    prix_vente: ""
+    prix_vente: "",
+    code_interne: ""
   });
 
   useEffect(() => {
+    setMounted(true);
     if (isOpen) {
       fetchRayons();
       setTimeout(() => firstInputRef.current?.focus(), 100);
@@ -71,6 +76,7 @@ export default function CreateProductModal({ isOpen, onClose, initialRayon, onSu
         rayon: formData.rayon,
         groupe_produit: formData.groupe_produit,
         prix_vente: parseFloat(formData.prix_vente) || 0,
+        code_interne: formData.code_interne || null,
         updated_at: new Date().toISOString()
       }]).select().single();
 
@@ -100,11 +106,11 @@ export default function CreateProductModal({ isOpen, onClose, initialRayon, onSu
     }
   };
 
-  if (!isOpen) return null;
+  if (!isOpen || !mounted) return null;
 
-  return (
+  return createPortal(
     <AnimatePresence>
-      <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/90 backdrop-blur-md">
+      <div className="fixed inset-0 z-[1000] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/90 backdrop-blur-md">
         <motion.div 
           initial={{ y: "100%" }}
           animate={{ y: 0 }}
@@ -142,20 +148,35 @@ export default function CreateProductModal({ isOpen, onClose, initialRayon, onSu
             )}
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-              {/* EAN */}
-              <div className="sm:col-span-2 space-y-2">
-                <label className="text-[10px] font-black text-neutral-500 uppercase tracking-widest flex items-center gap-2 px-1">
-                  <Tag className="w-3 h-3" /> Code EAN <span className="text-red-500">*</span>
-                </label>
-                <input
-                  ref={firstInputRef}
-                  type="text"
-                  required
-                  value={formData.numero_ean}
-                  onChange={(e) => setFormData({...formData, numero_ean: e.target.value})}
-                  placeholder="8 à 14 chiffres"
-                  className="w-full bg-black border border-neutral-800 rounded-xl px-4 py-3.5 text-white focus:border-red-600 transition-all outline-none font-mono tracking-widest placeholder:text-neutral-800"
-                />
+              {/* IDENTIFIANTS */}
+              <div className="sm:col-span-2 grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-neutral-500 uppercase tracking-widest flex items-center gap-2 px-1">
+                    <Tag className="w-3 h-3" /> Code EAN <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    ref={firstInputRef}
+                    type="text"
+                    required
+                    value={formData.numero_ean}
+                    onChange={(e) => setFormData({...formData, numero_ean: e.target.value})}
+                    placeholder="8 à 14 chiffres"
+                    className="w-full bg-black border border-neutral-800 rounded-xl px-4 py-3.5 text-white focus:border-red-600 transition-all outline-none font-mono tracking-widest placeholder:text-neutral-800"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-neutral-500 uppercase tracking-widest flex items-center gap-2 px-1">
+                    <Database className="w-3 h-3" /> Code Interne
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.code_interne}
+                    onChange={(e) => setFormData({...formData, code_interne: e.target.value})}
+                    placeholder="Identifiant magasin"
+                    className="w-full bg-black border border-neutral-800 rounded-xl px-4 py-3.5 text-white focus:border-red-600 transition-all outline-none font-mono tracking-wider placeholder:text-neutral-800 uppercase"
+                  />
+                </div>
               </div>
 
               {/* Désignation */}
@@ -271,6 +292,7 @@ export default function CreateProductModal({ isOpen, onClose, initialRayon, onSu
           </div>
         </motion.div>
       </div>
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body
   );
 }

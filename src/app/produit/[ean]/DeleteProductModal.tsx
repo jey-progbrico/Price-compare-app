@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { 
   Trash2, 
   X, 
@@ -31,10 +32,12 @@ export default function DeleteProductModal({ produit, onClose }: Props) {
     consultations: 0,
     loading: true
   });
+  const [mounted, setMounted] = useState(false);
   const router = useRouter();
 
   // Fetch linked data counts
   useEffect(() => {
+    setMounted(true);
     const fetchStats = async () => {
       try {
         const [relevesRes, activitesRes, consultationsRes] = await Promise.all([
@@ -91,14 +94,16 @@ export default function DeleteProductModal({ produit, onClose }: Props) {
     }
   };
 
-  return (
-    <div className="fixed inset-0 z-[120] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/95 backdrop-blur-xl animate-in fade-in duration-300">
+  if (!mounted) return null;
+
+  return createPortal(
+    <div className="fixed inset-0 z-[1000] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/95 backdrop-blur-xl animate-in fade-in duration-300">
       <div className="bg-[#0a0a0c] border-t sm:border border-red-900/30 rounded-t-[2.5rem] sm:rounded-[2.5rem] w-full max-w-lg overflow-hidden shadow-[0_0_50px_rgba(220,38,38,0.15)] animate-in slide-in-from-bottom-10 duration-500">
         
         {/* Header */}
         <div className="p-6 flex justify-between items-center border-b border-white/5">
           <div className="flex items-center gap-4">
-            <div className="w-12 h-12 bg-red-500/10 border border-red-500/20 rounded-2xl flex items-center justify-center text-red-500">
+            <div className="w-12 h-12 bg-red-500/10 border border-red-500/20 rounded-xl flex items-center justify-center text-red-500">
               <Trash2 className="w-6 h-6" />
             </div>
             <div>
@@ -210,6 +215,7 @@ export default function DeleteProductModal({ produit, onClose }: Props) {
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

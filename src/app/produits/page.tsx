@@ -34,7 +34,7 @@ function ProduitsPageContent() {
         const { data, error } = await supabase
           .from("produits")
           .select("*")
-          .or(`description_produit.ilike.%${query}%,numero_ean.ilike.%${query}%,marque.ilike.%${query}%,groupe_produit.ilike.%${query}%,rayon.ilike.%${query}%`)
+          .or(`description_produit.ilike.%${query}%,numero_ean.ilike.%${query}%,marque.ilike.%${query}%,groupe_produit.ilike.%${query}%,rayon.ilike.%${query}%,code_interne.ilike.%${query}%`)
           .limit(100);
         
         if (data) setProducts(data as Product[]);

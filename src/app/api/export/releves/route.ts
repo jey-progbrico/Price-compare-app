@@ -51,6 +51,7 @@ export async function GET(request: Request) {
           "Produit": p?.description_produit || rel.designation_originale || "N/A",
           "Marque": p?.marque || "N/A",
           "EAN": rel.ean,
+          "Code Interne": p?.code_interne || "N/A",
           "Prix magasin (€)": prixMagasin,
           "Concurrent": rel.enseigne,
           "Prix concurrent (€)": prixConcurrent,
@@ -70,7 +71,7 @@ export async function GET(request: Request) {
     // Style minimal : Largeur colonnes auto
     const colWidths = [
       { wch: 15 }, { wch: 15 }, { wch: 20 }, { wch: 40 }, { wch: 15 },
-      { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 50 }
+      { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 50 }
     ];
     ws["!cols"] = colWidths;
 

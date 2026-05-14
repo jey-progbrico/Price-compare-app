@@ -9,7 +9,8 @@ export async function GET() {
       "groupe_produit",
       "marque",
       "prix_vente",
-      "rayon"
+      "rayon",
+      "code_interne"
     ];
 
     const data = [
@@ -19,7 +20,8 @@ export async function GET() {
         groupe_produit: "Appareillage",
         marque: "Legrand",
         prix_vente: 12.90,
-        rayon: "Électricité"
+        rayon: "Électricité",
+        code_interne: "E12345"
       }
     ];
 
@@ -34,6 +36,7 @@ export async function GET() {
       { wch: 20 }, // marque
       { wch: 15 }, // prix_vente
       { wch: 20 }, // rayon
+      { wch: 20 }, // code_interne
     ];
 
     XLSX.utils.book_append_sheet(wb, ws, "Import Produits");

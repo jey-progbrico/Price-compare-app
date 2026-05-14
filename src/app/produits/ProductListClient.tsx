@@ -27,7 +27,8 @@ export default function ProductListClient({
       return !lowerQuery || 
         (p.description_produit && p.description_produit.toLowerCase().includes(lowerQuery)) ||
         (p.numero_ean && p.numero_ean.includes(lowerQuery)) ||
-        (p.marque && p.marque.toLowerCase().includes(lowerQuery));
+        (p.marque && p.marque.toLowerCase().includes(lowerQuery)) ||
+        (p.code_interne && p.code_interne.toLowerCase().includes(lowerQuery));
     });
   }, [initialProducts, query]);
 
@@ -142,7 +143,12 @@ export default function ProductListClient({
                   <h4 className="text-[13px] lg:text-[11px] font-bold text-white lg:text-neutral-300 line-clamp-1 group-hover:text-red-500 transition-colors leading-tight">
                     {p.description_produit}
                   </h4>
-                  <p className="text-[9px] lg:text-[7px] font-mono text-neutral-600 mt-0">EAN: {p.numero_ean}</p>
+                  <div className="flex items-center gap-2">
+                    <p className="text-[9px] lg:text-[7px] font-mono text-neutral-600 mt-0">EAN: {p.numero_ean}</p>
+                    {p.code_interne && (
+                      <p className="text-[9px] lg:text-[7px] font-mono text-red-500/80 mt-0">REF: {p.code_interne}</p>
+                    )}
+                  </div>
                 </div>
               </div>
               <div className="text-right shrink-0 ml-4 lg:ml-2 border-l border-neutral-800/50 lg:pl-3">
@@ -210,7 +216,12 @@ export default function ProductListClient({
                                 <h4 className="text-[13px] lg:text-[10px] font-medium text-neutral-400 line-clamp-1 group-hover:text-white leading-tight">
                                   {p.description_produit}
                                 </h4>
-                                <p className="text-[9px] lg:text-[7px] font-mono text-neutral-700 mt-0 tracking-tighter">EAN: {p.numero_ean}</p>
+                                <div className="flex items-center gap-2">
+                                  <p className="text-[9px] lg:text-[7px] font-mono text-neutral-700 mt-0 tracking-tighter">EAN: {p.numero_ean}</p>
+                                  {p.code_interne && (
+                                    <p className="text-[9px] lg:text-[7px] font-mono text-red-500/50 mt-0 tracking-tighter uppercase">REF: {p.code_interne}</p>
+                                  )}
+                                </div>
                               </div>
                               <div className="flex items-center gap-2 lg:gap-1.5 shrink-0 pl-2 lg:border-l lg:border-neutral-800/30">
                                 <span className="text-sm lg:text-[10px] font-black text-white">{Number(p.prix_vente).toFixed(2)}€</span>

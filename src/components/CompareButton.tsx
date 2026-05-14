@@ -327,60 +327,62 @@ function ManualVeilleCard({ res, index, ean, internalPrice, releveId, onDelete }
       </div>
 
       {/* Zone d'action : Saisie du prix */}
-      <div className="flex items-center gap-2">
-        <div className="relative flex-1">
-          <input
-            type="number"
-            step="0.01"
-            placeholder="Prix constaté..."
-            value={prix}
-            onChange={(e) => setPrix(e.target.value)}
-            className="w-full bg-black border border-neutral-800 rounded-xl px-4 py-3 text-sm
-                       focus:border-red-600 focus:ring-1 focus:ring-red-600 outline-none
-                       transition-all text-white placeholder:text-neutral-700"
-          />
-          <div className="absolute right-4 top-1/2 -translate-y-1/2 text-neutral-600 text-xs font-bold">
-            €
-          </div>
-        </div>
-
+      <div className="space-y-3">
         {!releveId && (
-          <div className="flex bg-black border border-neutral-800 rounded-xl p-1">
+          <div className="flex bg-black border border-neutral-800 rounded-xl p-1 w-fit">
             <button
               onClick={() => setMatchType("exact")}
-              className={`px-3 py-2 rounded-lg text-[9px] font-black uppercase transition-all ${
-                matchType === "exact" ? "bg-emerald-600 text-white shadow-lg" : "text-neutral-600 hover:text-neutral-400"
+              className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase transition-all ${
+                matchType === "exact" ? "bg-emerald-600 text-white shadow-lg" : "text-neutral-500 hover:text-neutral-400"
               }`}
             >
-              Exact
+              EAN Exact
             </button>
             <button
               onClick={() => setMatchType("equivalent")}
-              className={`px-3 py-2 rounded-lg text-[9px] font-black uppercase transition-all ${
-                matchType === "equivalent" ? "bg-orange-600 text-white shadow-lg" : "text-neutral-600 hover:text-neutral-400"
+              className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase transition-all ${
+                matchType === "equivalent" ? "bg-orange-600 text-white shadow-lg" : "text-neutral-500 hover:text-neutral-400"
               }`}
             >
-              Equiv.
+              Équivalent
             </button>
           </div>
         )}
-        
-        <button
-          onClick={handleSave}
-          disabled={loading || !prix}
-          className={`px-5 py-3 rounded-xl font-bold text-sm transition-all flex items-center gap-2
-                     ${saved 
-                       ? "bg-emerald-600 text-white" 
-                       : "bg-white text-black hover:bg-neutral-200 disabled:opacity-30 disabled:hover:bg-white"}`}
-        >
-          {loading ? (
-            <Loader2 className="w-4 h-4 animate-spin" />
-          ) : saved ? (
-            <CheckCircle2 className="w-4 h-4" />
-          ) : (
-            "Enregistrer"
-          )}
-        </button>
+
+        <div className="flex items-center gap-2">
+          <div className="relative flex-1">
+            <input
+              type="number"
+              step="0.01"
+              placeholder="Prix..."
+              value={prix}
+              onChange={(e) => setPrix(e.target.value)}
+              className="w-full bg-black border border-neutral-800 rounded-xl px-4 py-3 text-sm
+                         focus:border-red-600 focus:ring-1 focus:ring-red-600 outline-none
+                         transition-all text-white placeholder:text-neutral-700"
+            />
+            <div className="absolute right-4 top-1/2 -translate-y-1/2 text-neutral-600 text-xs font-bold">
+              €
+            </div>
+          </div>
+          
+          <button
+            onClick={handleSave}
+            disabled={loading || !prix}
+            className={`px-5 py-3 rounded-xl font-bold text-sm transition-all flex items-center gap-2 shrink-0
+                       ${saved 
+                         ? "bg-emerald-600 text-white" 
+                         : "bg-white text-black hover:bg-neutral-200 disabled:opacity-30 disabled:hover:bg-white"}`}
+          >
+            {loading ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : saved ? (
+              <CheckCircle2 className="w-4 h-4" />
+            ) : (
+              "Enregistrer"
+            )}
+          </button>
+        </div>
       </div>
     </div>
   );

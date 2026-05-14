@@ -11,6 +11,7 @@ interface RawRow {
   marque?: string;
   prix_vente?: string | number;
   rayon?: string;
+  code_interne?: string | number;
 }
 
 export async function POST(request: Request) {
@@ -89,6 +90,7 @@ export async function POST(request: Request) {
         rayon: String(row.rayon).trim(),
         groupe_produit: String(row.groupe_produit).trim(),
         prix_vente: prix,
+        code_interne: row.code_interne ? String(row.code_interne).trim() : null,
         updated_at: new Date().toISOString()
       });
     });

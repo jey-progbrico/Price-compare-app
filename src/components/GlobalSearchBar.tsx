@@ -11,7 +11,7 @@ interface GlobalSearchBarProps {
 }
 
 export default function GlobalSearchBar({ 
-  placeholder = "Chercher EAN, nom, marque...", 
+  placeholder = "EAN, Code interne, nom, marque...", 
   className = "",
   initialValue = ""
 }: GlobalSearchBarProps) {

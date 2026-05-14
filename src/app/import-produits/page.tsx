@@ -104,6 +104,7 @@ export default function ImportProduitsPage() {
                 <div className="flex justify-between"><span>marque</span> <span className="text-emerald-500/50">OK</span></div>
                 <div className="flex justify-between"><span>prix_vente</span> <span className="text-emerald-500/50">OK</span></div>
                 <div className="flex justify-between"><span>rayon</span> <span className="text-emerald-500/50">OK</span></div>
+                <div className="flex justify-between"><span>code_interne</span> <span className="text-blue-400/50">FACULTATIF</span></div>
               </div>
             </div>
           </div>

@@ -19,7 +19,7 @@ export async function enrichWithProducts<T extends { ean?: string | null }>(item
   // 2. Récupérer les produits correspondants
   const { data: produits, error } = await supabase
     .from("produits")
-    .select("numero_ean, description_produit, marque, rayon, groupe_produit, prix_vente")
+    .select("numero_ean, description_produit, marque, rayon, groupe_produit, prix_vente, code_interne")
     .in("numero_ean", eans);
 
   if (error) {
