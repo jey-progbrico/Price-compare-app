@@ -470,7 +470,7 @@ export default function CompareButton({
                 res={{
                   enseigne: rel.enseigne,
                   titre: rel.designation_originale || "Produit sans nom",
-                  lien: rel.url,
+                  lien: rel.url || "",
                   prix: rel.prix_constate,
                   source: "releve_manuel"
                 }}

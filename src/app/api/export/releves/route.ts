@@ -54,8 +54,8 @@ export async function GET(request: Request) {
           "Prix magasin (€)": prixMagasin,
           "Concurrent": rel.enseigne,
           "Prix concurrent (€)": prixConcurrent,
-          "Écart prix (€)": Number(ecart.toFixed(2)),
-          "URL concurrent": rel.url
+          \"Écart prix (€)\": Number(ecart.toFixed(2)),
+          \"URL concurrent\": rel.url || \"\"
         };
       });
 
