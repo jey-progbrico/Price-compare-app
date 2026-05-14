@@ -28,7 +28,7 @@ export async function enrichWithProducts<T extends { ean?: string | null }>(item
   }
 
   // 3. Créer un Map pour accès rapide
-  const produitMap = new Map(produits?.map(p => [p.numero_ean, p]) || []);
+  const produitMap = new Map((produits as Product[] | null)?.map(p => [p.numero_ean, p]) || []);
 
   // 4. Fusionner les données
   return items.map(item => ({
