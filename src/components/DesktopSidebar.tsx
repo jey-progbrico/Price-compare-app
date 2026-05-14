@@ -1,7 +1,9 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { createClient } from "@/lib/supabase/client";
 import { 
   LayoutDashboard, 
   Package, 
@@ -11,21 +13,61 @@ import {
   Settings, 
   Search,
   ScanLine,
-  Zap
+  Zap,
+  MessageSquare
 } from "lucide-react";
 import { motion } from "framer-motion";
-
-const menuItems = [
-  { href: "/", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/produits", label: "Catalogue", icon: Package },
-  { href: "/historique", label: "Historique", icon: History },
-  { href: "/activites", label: "Activités", icon: Activity },
-  { href: "/import-produits", label: "Import Excel", icon: FileSpreadsheet },
-  { href: "/parametres", label: "Paramètres", icon: Settings },
-];
+import { useProfile } from "@/hooks/useProfile";
 
 export default function DesktopSidebar() {
   const pathname = usePathname();
+  const { isAdmin } = useProfile();
+  const [unreadCount, setUnreadCount] = useState(0);
+  const supabase = createClient();
+
+  useEffect(() => {
+    if (!isAdmin) return;
+
+    const fetchUnread = async () => {
+      const { data, error } = await supabase
+        .from("support_conversations")
+        .select("unread_count_admin");
+      
+      if (!error) {
+        const total = data.reduce((acc, conv) => acc + (conv.unread_count_admin || 0), 0);
+        setUnreadCount(total);
+      }
+    };
+
+    fetchUnread();
+
+    const channel = supabase
+      .channel("sidebar_support_sync")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "support_conversations" },
+        () => fetchUnread()
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [isAdmin, supabase]);
+
+  const menuItems = [
+    { href: "/", label: "Dashboard", icon: LayoutDashboard },
+    { href: "/produits", label: "Catalogue", icon: Package },
+    { href: "/historique", label: "Historique", icon: History },
+    { href: "/activites", label: "Activités", icon: Activity },
+    { href: "/import-produits", label: "Import Excel", icon: FileSpreadsheet },
+    { href: "/parametres", label: "Paramètres", icon: Settings },
+  ];
+
+  // Ajouter le support pour les admins
+  const displayItems = isAdmin 
+    ? [...menuItems.slice(0, 5), { href: "/support", label: "Support Admin", icon: MessageSquare }, menuItems[5]]
+    : menuItems;
 
   return (
     <aside className="hidden lg:flex flex-col w-72 bg-[#0d0d0f] border-r border-neutral-800/50 h-screen sticky top-0 z-50">
@@ -44,7 +86,7 @@ export default function DesktopSidebar() {
 
       {/* Nav */}
       <nav className="flex-1 px-4 space-y-1">
-        {menuItems.map((item) => {
+        {displayItems.map((item) => {
           const isActive = pathname === item.href || (item.href !== "/" && pathname.startsWith(item.href));
           return (
             <Link 
@@ -64,7 +106,15 @@ export default function DesktopSidebar() {
               )}
               <item.icon className={`w-5 h-5 shrink-0 transition-transform group-hover:scale-110 ${isActive ? "text-red-500" : "text-neutral-500"}`} />
               <span className="text-sm font-bold tracking-tight relative z-10">{item.label}</span>
-              {isActive && <div className="ml-auto w-1.5 h-1.5 rounded-full bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.5)]" />}
+              
+              {/* Badge Support Admin */}
+              {item.href === "/support" && unreadCount > 0 && (
+                <div className="ml-auto bg-red-600 text-white text-[10px] font-black px-2 py-0.5 rounded-full shadow-lg shadow-red-600/20">
+                  {unreadCount}
+                </div>
+              )}
+
+              {isActive && item.href !== "/support" && <div className="ml-auto w-1.5 h-1.5 rounded-full bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.5)]" />}
             </Link>
           );
         })}

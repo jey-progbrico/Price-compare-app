@@ -15,6 +15,7 @@ const geistMono = Geist_Mono({
 import BottomNav from "@/components/BottomNav";
 import DesktopSidebar from "@/components/DesktopSidebar";
 import ToastContainer from "@/components/Toast";
+import SupportBubble from "@/components/Support/SupportBubble";
 import { createClient } from "@/lib/supabase/server";
 
 export const metadata: Metadata = {
@@ -69,6 +70,9 @@ export default async function RootLayout({
           )}
           
           <ToastContainer />
+          
+          {/* Support Bubble - Global */}
+          {user && <SupportBubble />}
         </div>
       </body>
     </html>
