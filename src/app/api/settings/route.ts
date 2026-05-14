@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
+import { Setting } from "@/types/database";
 
 /**
  * GET /api/settings
@@ -13,13 +14,8 @@ export async function GET() {
 
     if (error) throw error;
 
-    interface SettingRow {
-      key: string;
-      value: string;
-    }
-
     // Convertir en objet simple { [key]: value }
-    const settings = (data as SettingRow[]).reduce<Record<string, string>>((acc, curr) => {
+    const settings = (data as Setting[]).reduce<Record<string, string>>((acc, curr) => {
       acc[curr.key] = curr.value;
       return acc;
     }, {});

@@ -1,3 +1,4 @@
+import { Product } from "@/types/database";
 import { supabase } from "./supabase";
 
 /**
@@ -7,7 +8,7 @@ import { supabase } from "./supabase";
  * @param items Liste d'objets contenant une propriété 'ean'
  * @returns La liste enrichie avec une propriété 'produit'
  */
-export async function enrichWithProducts(items: any[]) {
+export async function enrichWithProducts<T extends { ean: string }>(items: T[]): Promise<(T & { produit: Product | null })[]> {
   if (!items || items.length === 0) return [];
 
   // 1. Extraire les EAN uniques

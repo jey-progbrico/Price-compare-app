@@ -6,6 +6,17 @@ export const dynamic = "force-dynamic";
 
 import { enrichWithProducts } from "@/lib/data-utils";
 
+interface HistoriqueActivity {
+  id: string;
+  type: "releve" | "consultation";
+  date: Date;
+  ean: string;
+  enseigne?: string;
+  prix?: number | null;
+  titre: string;
+  marque?: string | null;
+}
+
 async function getActivites() {
   // 1. Charger les 15 derniers relevés (bruts)
   const { data: rawReleves } = await supabase
@@ -23,12 +34,12 @@ async function getActivites() {
 
   // 3. Enrichir les deux listes avec les détails produits via le helper
   const [releves, consultations] = await Promise.all([
-    enrichWithProducts(rawReleves || []),
-    enrichWithProducts(rawConsultations || [])
+    enrichWithProducts((rawReleves as any[]) || []),
+    enrichWithProducts((rawConsultations as any[]) || [])
   ]);
 
   // 4. Fusionner et typer pour l'affichage
-  const activites: any[] = [];
+  const activites: HistoriqueActivity[] = [];
 
   releves.forEach(r => {
     activites.push({

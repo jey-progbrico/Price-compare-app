@@ -15,17 +15,17 @@ import {
   TrendingUp,
   FileSpreadsheet
 } from "lucide-react";
+import { 
+  RayonRow, 
+  ConcurrentRow, 
+  PriceCache as RecentProduct, 
+  Activity as ActivityRow 
+} from "@/types/database";
 
 export const dynamic = "force-dynamic";
 export const fetchCache = "force-no-store";
 
 export default async function Home() {
-  interface RayonRow { rayon: string; }
-  interface ConcurrentRow { enseigne: string; }
-  interface RecentProduct { ean: string; titre: string; prix: number; enseigne: string; updated_at: string; }
-  interface SupportSummary { unread_count_admin: number; unread_count_user: number; }
-  interface ActivityRow { type_action: string; ean?: string; details?: any; created_at: string; }
-
   const [
     { count: totalProduits },
     { count: totalReleves },
@@ -73,7 +73,7 @@ export default async function Home() {
     .from("support_conversations")
     .select("unread_count_admin, unread_count_user");
   
-  const unreadCount = (convs as SupportSummary[] | null)?.reduce((acc, c) => acc + (c.unread_count_admin || 0) + (c.unread_count_user || 0), 0) || 0;
+  const unreadCount = (convs as { unread_count_admin: number; unread_count_user: number; }[] | null)?.reduce((acc, c) => acc + (c.unread_count_admin || 0) + (c.unread_count_user || 0), 0) || 0;
 
   return (
     <main className="min-h-full bg-[#0a0a0c] selection:bg-red-500/30">

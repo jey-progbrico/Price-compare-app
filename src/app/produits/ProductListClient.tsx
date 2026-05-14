@@ -4,12 +4,13 @@ import { useState, useMemo } from "react";
 import Link from "next/link";
 import { Search, ArrowRight, ScanBarcode, ChevronRight, Package } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { Product } from "@/types/database";
 
 export default function ProductListClient({ 
   initialProducts, 
   isHierarchicalView = true 
 }: { 
-  initialProducts: any[],
+  initialProducts: Product[],
   isHierarchicalView?: boolean 
 }) {
   const [query, setQuery] = useState("");
@@ -30,7 +31,7 @@ export default function ProductListClient({
 
   // Group products hierarchically: Category -> Brand -> Products
   const hierarchicalProducts = useMemo(() => {
-    const tree: Record<string, Record<string, any[]>> = {};
+    const tree: Record<string, Record<string, Product[]>> = {};
     
     filteredProducts.forEach(p => {
       const cat = p.categorie || "Sans catégorie";

@@ -21,6 +21,8 @@ import {
   Trash2,
 } from "lucide-react";
 
+import { Product, PriceLog } from "@/types/database";
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface SearchResult {
@@ -357,11 +359,11 @@ export default function CompareButton({
   internalPrice?: number | null;
   isUnknown: boolean;
   onManualPriceClick?: (enseigne: string, lien: string, titre: string) => void;
-  produit?: any;
+  produit?: Product | null;
 }) {
   const [phase, setPhase] = useState<"idle" | "cache_check" | "done">("cache_check");
   const [results, setResults] = useState<SearchResult[]>([]);
-  const [releves, setReleves] = useState<any[]>([]);
+  const [releves, setReleves] = useState<PriceLog[]>([]);
   
   // ─── Initialisation : chargement des données ────────────────────────────
 

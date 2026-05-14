@@ -8,14 +8,14 @@ interface Column {
   className?: string;
 }
 
-interface Props {
+interface Props<T> {
   columns: Column[];
-  data: any[];
-  renderRow: (item: any) => ReactNode;
-  onRowClick?: (item: any) => void;
+  data: T[];
+  renderRow: (item: T) => ReactNode;
+  onRowClick?: (item: T) => void;
 }
 
-export default function DesktopTable({ columns, data, renderRow, onRowClick }: Props) {
+export default function DesktopTable<T>({ columns, data, renderRow, onRowClick }: Props<T>) {
   return (
     <div className="hidden lg:block w-full overflow-hidden bg-neutral-900/30 border border-neutral-800/50 rounded-[2rem] shadow-2xl">
       <table className="w-full text-left border-collapse">

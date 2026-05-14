@@ -6,6 +6,7 @@ import { Package, ArrowRight, Plus } from "lucide-react";
 import Link from "next/link";
 import CreateProductModal from "@/components/CreateProductModal";
 import { useSearchParams } from "next/navigation";
+import { RayonRow } from "@/types/database";
 
 function ProduitsPageContent() {
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -22,10 +23,6 @@ function ProduitsPageContent() {
   // Fetch unique rayons on client side since we need state for the modal
   useEffect(() => {
     const fetchRayons = async () => {
-      interface RayonRow {
-        rayon: string;
-      }
-      
       const { data } = await supabase
         .from("produits")
         .select("rayon")

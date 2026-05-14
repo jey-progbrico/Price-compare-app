@@ -14,17 +14,10 @@ import {
   ArrowRight
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import { RayonRow, GroupeRow, Product } from "@/types/database";
 
 interface Props {
-  produit: {
-    numero_ean: string;
-    marque: string | null;
-    description_produit: string | null;
-    reference_fabricant?: string | null;
-    rayon?: string | null;
-    groupe_produit?: string | null;
-    prix_vente: number | null;
-  };
+  produit: Product;
   onClose: () => void;
 }
 
@@ -44,14 +37,9 @@ export default function EditProductModal({ produit, onClose }: Props) {
 
   useEffect(() => {
     const fetchMeta = async () => {
-      interface ProduitMetaRow {
-        rayon: string | null;
-        groupe_produit: string | null;
-      }
-      
       const { data } = await supabase.from("produits").select("rayon, groupe_produit");
       if (data) {
-        const rows = data as ProduitMetaRow[];
+        const rows = data as (RayonRow & GroupeRow)[];
         setRayons(Array.from(new Set(rows.map(r => r.rayon).filter((r): r is string => !!r))));
         setGroupes(Array.from(new Set(rows.map(r => r.groupe_produit).filter((r): r is string => !!r))));
       }

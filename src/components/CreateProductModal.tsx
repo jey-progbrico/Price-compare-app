@@ -14,12 +14,13 @@ import {
 import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "@/lib/supabase";
 import { useRouter } from "next/navigation";
+import { RayonRow, Product } from "@/types/database";
 
 interface Props {
   isOpen: boolean;
   onClose: () => void;
   initialRayon?: string;
-  onSuccess?: (newProduct: any) => void;
+  onSuccess?: (newProduct: Product) => void;
 }
 
 export default function CreateProductModal({ isOpen, onClose, initialRayon, onSuccess }: Props) {
@@ -47,8 +48,8 @@ export default function CreateProductModal({ isOpen, onClose, initialRayon, onSu
 
   const fetchRayons = async () => {
     const { data } = await supabase.from("produits").select("rayon").not("rayon", "is", null);
-    const unique = Array.from(new Set(data?.map(r => r.rayon) || []));
-    setRayons(unique as string[]);
+    const unique = Array.from(new Set((data as RayonRow[] | null)?.map(r => r.rayon) || []));
+    setRayons(unique);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -89,7 +90,7 @@ export default function CreateProductModal({ isOpen, onClose, initialRayon, onSu
         })
       });
 
-      if (onSuccess) onSuccess(data);
+      if (onSuccess) onSuccess(data as Product);
       onClose();
       router.refresh();
     } catch (err: any) {
@@ -102,164 +103,174 @@ export default function CreateProductModal({ isOpen, onClose, initialRayon, onSu
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-2 sm:p-6 backdrop-blur-md bg-black/80">
-      <motion.div 
-        initial={{ opacity: 0, scale: 0.95, y: 20 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        exit={{ opacity: 0, scale: 0.95, y: 20 }}
-        className="w-full max-w-2xl bg-neutral-950 border border-neutral-800 rounded-3xl lg:rounded-[2.5rem] shadow-2xl overflow-hidden flex flex-col max-h-[95vh] lg:max-h-[none]"
-      >
-        {/* Header */}
-        <div className="px-6 lg:px-8 py-5 lg:py-6 border-b border-neutral-900 flex justify-between items-center bg-neutral-900/20 shrink-0">
-          <div className="flex items-center gap-3 lg:gap-4">
-            <div className="w-10 h-10 lg:w-12 lg:h-12 bg-red-600/10 border border-red-600/20 rounded-xl lg:rounded-2xl flex items-center justify-center text-red-500">
-              <Package className="w-5 h-5 lg:w-6 lg:h-6" />
+    <AnimatePresence>
+      <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/90 backdrop-blur-md">
+        <motion.div 
+          initial={{ y: "100%" }}
+          animate={{ y: 0 }}
+          exit={{ y: "100%" }}
+          transition={{ type: "spring", damping: 25, stiffness: 200 }}
+          className="bg-neutral-950 border-t sm:border border-neutral-800 rounded-t-[2.5rem] sm:rounded-[2.5rem] w-full max-w-xl overflow-hidden shadow-2xl max-h-[95vh] flex flex-col"
+        >
+          {/* Header */}
+          <div className="p-6 flex justify-between items-center border-b border-neutral-900 bg-neutral-950/50">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-red-600/10 border border-red-600/20 rounded-xl flex items-center justify-center text-red-600">
+                <Package className="w-5 h-5" />
+              </div>
+              <div>
+                <h2 className="text-xl font-black text-white tracking-tight uppercase">Nouveau Produit</h2>
+                <p className="text-[10px] font-bold text-neutral-500 uppercase tracking-widest">Ajout manuel catalogue</p>
+              </div>
             </div>
-            <div>
-              <h2 className="text-lg lg:text-xl font-black text-white tracking-tight uppercase">Nouveau Produit</h2>
-              <p className="text-[9px] lg:text-[10px] font-bold text-neutral-500 uppercase tracking-widest">Ajout rapide au catalogue</p>
-            </div>
+            <button onClick={onClose} className="p-2 bg-neutral-900 rounded-full text-neutral-500 hover:text-white transition-all active:scale-90">
+              <X className="w-5 h-5" />
+            </button>
           </div>
-          <button 
-            onClick={onClose}
-            className="p-2.5 lg:p-3 bg-neutral-900 rounded-full text-neutral-500 hover:text-white transition-all active:scale-90"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
 
-        <form onSubmit={handleSubmit} className="p-6 lg:p-8 space-y-5 lg:space-y-6 overflow-y-auto">
-          {error && (
-            <motion.div 
-              initial={{ opacity: 0, x: -10 }}
-              animate={{ opacity: 1, x: 0 }}
-              className="flex items-center gap-3 p-4 bg-red-500/10 border border-red-500/20 rounded-2xl text-red-500 text-xs font-bold uppercase tracking-wide"
-            >
-              <AlertCircle className="w-5 h-5 shrink-0" />
-              {error}
-            </motion.div>
-          )}
+          {/* Formulaire */}
+          <form onSubmit={handleSubmit} className="p-6 space-y-6 overflow-y-auto flex-1 custom-scrollbar">
+            {error && (
+              <motion.div 
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="p-4 bg-red-600/10 border border-red-600/20 rounded-2xl flex items-center gap-3 text-red-500"
+              >
+                <AlertCircle className="w-5 h-5 shrink-0" />
+                <p className="text-xs font-bold uppercase tracking-tight">{error}</p>
+              </motion.div>
+            )}
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 lg:gap-6">
-            {/* EAN */}
-            <div className="space-y-1.5 lg:space-y-2">
-              <label className="text-[9px] lg:text-[10px] font-black text-neutral-500 uppercase tracking-widest px-1">Code EAN (Obligatoire)</label>
-              <div className="relative">
-                <Tag className="absolute left-4 top-1/2 -translate-y-1/2 w-3.5 h-3.5 lg:w-4 lg:h-4 text-neutral-700" />
-                <input 
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+              {/* EAN */}
+              <div className="sm:col-span-2 space-y-2">
+                <label className="text-[10px] font-black text-neutral-500 uppercase tracking-widest flex items-center gap-2 px-1">
+                  <Tag className="w-3 h-3" /> Code EAN <span className="text-red-500">*</span>
+                </label>
+                <input
                   ref={firstInputRef}
+                  type="text"
                   required
-                  type="text" 
-                  placeholder="Ex: 3254560412345"
                   value={formData.numero_ean}
-                  onChange={e => setFormData({...formData, numero_ean: e.target.value})}
-                  className="w-full bg-neutral-900/50 border border-neutral-800 rounded-xl pl-11 lg:pl-12 pr-4 py-3 lg:py-3.5 text-white font-mono text-sm focus:border-red-600 outline-none transition-all"
+                  onChange={(e) => setFormData({...formData, numero_ean: e.target.value})}
+                  placeholder="8 à 14 chiffres"
+                  className="w-full bg-black border border-neutral-800 rounded-xl px-4 py-3.5 text-white focus:border-red-600 transition-all outline-none font-mono tracking-widest placeholder:text-neutral-800"
                 />
               </div>
-            </div>
 
-            {/* Marque */}
-            <div className="space-y-1.5 lg:space-y-2">
-              <label className="text-[9px] lg:text-[10px] font-black text-neutral-500 uppercase tracking-widest px-1">Marque</label>
-              <div className="relative">
-                <CheckCircle2 className="absolute left-4 top-1/2 -translate-y-1/2 w-3.5 h-3.5 lg:w-4 lg:h-4 text-neutral-700" />
-                <input 
+              {/* Désignation */}
+              <div className="sm:col-span-2 space-y-2">
+                <label className="text-[10px] font-black text-neutral-500 uppercase tracking-widest flex items-center gap-2 px-1">
+                  <Package className="w-3 h-3" /> Désignation <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
                   required
-                  type="text" 
-                  placeholder="Ex: Legrand"
-                  value={formData.marque}
-                  onChange={e => setFormData({...formData, marque: e.target.value})}
-                  className="w-full bg-neutral-900/50 border border-neutral-800 rounded-xl pl-11 lg:pl-12 pr-4 py-3 lg:py-3.5 text-white text-sm focus:border-red-600 outline-none transition-all"
-                />
-              </div>
-            </div>
-
-            {/* Désignation */}
-            <div className="md:col-span-2 space-y-1.5 lg:space-y-2">
-              <label className="text-[9px] lg:text-[10px] font-black text-neutral-500 uppercase tracking-widest px-1">Désignation Produit</label>
-              <div className="relative">
-                <Package className="absolute left-4 top-1/2 -translate-y-1/2 w-3.5 h-3.5 lg:w-4 lg:h-4 text-neutral-700" />
-                <input 
-                  required
-                  type="text" 
-                  placeholder="Ex: Interrupteur Va-et-Vient Mosaic Blanc"
                   value={formData.description_produit}
-                  onChange={e => setFormData({...formData, description_produit: e.target.value})}
-                  className="w-full bg-neutral-900/50 border border-neutral-800 rounded-xl pl-11 lg:pl-12 pr-4 py-3 lg:py-3.5 text-white text-sm focus:border-red-600 outline-none transition-all font-bold"
+                  onChange={(e) => setFormData({...formData, description_produit: e.target.value})}
+                  placeholder="Ex: Interrupteur Va-et-Vient"
+                  className="w-full bg-black border border-neutral-800 rounded-xl px-4 py-3.5 text-white focus:border-red-600 transition-all outline-none placeholder:text-neutral-800"
                 />
               </div>
-            </div>
 
-            {/* Prix */}
-            <div className="space-y-1.5 lg:space-y-2">
-              <label className="text-[9px] lg:text-[10px] font-black text-neutral-500 uppercase tracking-widest px-1">Prix Vente (€)</label>
-              <div className="relative">
-                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-neutral-700 font-bold text-sm">€</span>
-                <input 
+              {/* Marque */}
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-neutral-500 uppercase tracking-widest flex items-center gap-2 px-1">
+                  <CheckCircle2 className="w-3 h-3" /> Marque <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
                   required
-                  type="number" 
+                  value={formData.marque}
+                  onChange={(e) => setFormData({...formData, marque: e.target.value})}
+                  placeholder="Ex: Legrand"
+                  className="w-full bg-black border border-neutral-800 rounded-xl px-4 py-3.5 text-white focus:border-red-600 transition-all outline-none placeholder:text-neutral-800"
+                />
+              </div>
+
+              {/* Prix */}
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-neutral-500 uppercase tracking-widest flex items-center gap-2 px-1">
+                  <Save className="w-3 h-3" /> Prix Vente (€)
+                </label>
+                <input
+                  type="number"
                   step="0.01"
-                  placeholder="0.00"
                   value={formData.prix_vente}
-                  onChange={e => setFormData({...formData, prix_vente: e.target.value})}
-                  className="w-full bg-neutral-900/50 border border-neutral-800 rounded-xl pl-11 lg:pl-12 pr-4 py-3 lg:py-3.5 text-white text-sm focus:border-red-600 outline-none transition-all font-mono"
+                  onChange={(e) => setFormData({...formData, prix_vente: e.target.value})}
+                  placeholder="0.00"
+                  className="w-full bg-black border border-neutral-800 rounded-xl px-4 py-3.5 text-white focus:border-red-600 transition-all outline-none font-black text-lg placeholder:text-neutral-800"
                 />
               </div>
-            </div>
 
-            {/* Rayon */}
-            <div className="space-y-1.5 lg:space-y-2">
-              <label className="text-[9px] lg:text-[10px] font-black text-neutral-500 uppercase tracking-widest px-1">Rayon</label>
-              <div className="relative">
-                <Layers className="absolute left-4 top-1/2 -translate-y-1/2 w-3.5 h-3.5 lg:w-4 lg:h-4 text-neutral-700" />
-                <select 
-                  required
-                  value={formData.rayon}
-                  onChange={e => setFormData({...formData, rayon: e.target.value})}
-                  className="w-full bg-neutral-900/50 border border-neutral-800 rounded-xl pl-11 lg:pl-12 pr-4 py-3 lg:py-3.5 text-white text-sm focus:border-red-600 outline-none transition-all appearance-none"
-                >
-                  <option value="">Sélectionner...</option>
-                  {rayons.map(r => <option key={r} value={r}>{r}</option>)}
-                </select>
+              {/* Rayon */}
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-neutral-500 uppercase tracking-widest flex items-center gap-2 px-1">
+                  <Layers className="w-3 h-3" /> Rayon Métier
+                </label>
+                <div className="relative">
+                  <select
+                    value={formData.rayon}
+                    onChange={(e) => setFormData({...formData, rayon: e.target.value})}
+                    className="w-full bg-black border border-neutral-800 rounded-xl px-4 py-3.5 text-white focus:border-red-600 outline-none appearance-none pr-10"
+                  >
+                    <option value="">Sélectionner...</option>
+                    {rayons.map(r => <option key={r} value={r}>{r}</option>)}
+                    <option value="NOUVEAU">+ Créer un nouveau rayon</option>
+                  </select>
+                </div>
+                {formData.rayon === 'NOUVEAU' && (
+                  <input
+                    type="text"
+                    autoFocus
+                    onChange={(e) => setFormData({...formData, rayon: e.target.value})}
+                    placeholder="Nom du nouveau rayon"
+                    className="w-full mt-2 bg-neutral-900 border border-neutral-800 rounded-xl px-4 py-2 text-white focus:border-red-600 outline-none"
+                  />
+                )}
               </div>
-            </div>
 
-            {/* Famille */}
-            <div className="md:col-span-2 space-y-1.5 lg:space-y-2">
-              <label className="text-[9px] lg:text-[10px] font-black text-neutral-500 uppercase tracking-widest px-1">Famille / Groupe Produit</label>
-              <div className="relative">
-                <Layers className="absolute left-4 top-1/2 -translate-y-1/2 w-3.5 h-3.5 lg:w-4 lg:h-4 text-neutral-700" />
-                <input 
-                  required
-                  type="text" 
-                  placeholder="Ex: Appareillage Résidentiel"
+              {/* Famille (Groupe) */}
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-neutral-500 uppercase tracking-widest flex items-center gap-2 px-1">
+                  <Layers className="w-3 h-3" /> Famille Produit
+                </label>
+                <input
+                  type="text"
                   value={formData.groupe_produit}
-                  onChange={e => setFormData({...formData, groupe_produit: e.target.value})}
-                  className="w-full bg-neutral-900/50 border border-neutral-800 rounded-xl pl-11 lg:pl-12 pr-4 py-3 lg:py-3.5 text-white text-sm focus:border-red-600 outline-none transition-all"
+                  onChange={(e) => setFormData({...formData, groupe_produit: e.target.value})}
+                  placeholder="Ex: Interrupteurs"
+                  className="w-full bg-black border border-neutral-800 rounded-xl px-4 py-3.5 text-white focus:border-red-600 transition-all outline-none placeholder:text-neutral-800"
                 />
               </div>
             </div>
-          </div>
+          </form>
 
-          <div className="flex gap-3 lg:gap-4 pt-2 lg:pt-4 shrink-0">
-            <button 
-              type="button"
+          {/* Footer Actions */}
+          <div className="p-6 border-t border-neutral-900 bg-neutral-950/80 backdrop-blur-md flex gap-4">
+            <button
               onClick={onClose}
-              className="flex-1 px-4 lg:px-8 py-3.5 lg:py-4 bg-neutral-900 text-neutral-400 font-bold text-xs lg:text-sm rounded-xl lg:rounded-2xl hover:text-white transition-all active:scale-95"
+              className="flex-1 bg-neutral-900 text-neutral-400 font-bold py-4 rounded-2xl hover:text-white transition-all active:scale-95"
             >
               ANNULER
             </button>
-            <button 
-              type="submit"
+            <button
+              onClick={handleSubmit}
               disabled={loading}
-              className="flex-[2] px-4 lg:px-8 py-3.5 lg:py-4 bg-red-600 hover:bg-red-500 text-white font-black text-xs lg:text-sm rounded-xl lg:rounded-2xl transition-all shadow-lg shadow-red-600/20 flex items-center justify-center gap-2 lg:gap-3 active:scale-95 disabled:opacity-50"
+              className="flex-[2] bg-red-600 hover:bg-red-500 text-white font-black py-4 rounded-2xl transition-all shadow-lg shadow-red-600/20 flex items-center justify-center gap-3 active:scale-95 disabled:opacity-50"
             >
-              {loading ? <Loader2 className="w-4 h-4 lg:w-5 lg:h-5 animate-spin" /> : <Save className="w-4 h-4 lg:w-5 lg:h-5" />}
-              ENREGISTRER
+              {loading ? (
+                <Loader2 className="w-5 h-5 animate-spin" />
+              ) : (
+                <>
+                  <Save className="w-5 h-5" />
+                  CRÉER LE PRODUIT
+                </>
+              )}
             </button>
           </div>
-        </form>
-      </motion.div>
-    </div>
+        </motion.div>
+      </div>
+    </AnimatePresence>
   );
 }

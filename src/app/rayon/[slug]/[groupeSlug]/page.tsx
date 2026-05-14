@@ -3,17 +3,14 @@ import { ChevronLeft, Package, Tag } from "lucide-react";
 import Link from "next/link";
 import ProductListClient from "../../../produits/ProductListClient";
 
+import { RayonRow, GroupeRow } from "@/types/database";
+
 export const dynamic = "force-dynamic";
 
 export default async function GroupeProduitsPage({ params }: { params: Promise<{ slug: string, groupeSlug: string }> }) {
   const { slug, groupeSlug } = await params;
 
   console.log(`[NAV DEBUG] Slug reçu : rayon=${slug}, groupe=${groupeSlug}`);
-
-  interface RayonDataRow {
-    rayon: string | null;
-    groupe_produit: string | null;
-  }
 
   // 1. Récupérer les noms exacts en base de données pour éviter les erreurs d'accents/casse
   const { data: allData } = await supabase
@@ -22,7 +19,7 @@ export default async function GroupeProduitsPage({ params }: { params: Promise<{
     .not("rayon", "is", null)
     .not("groupe_produit", "is", null);
 
-  const rows = (allData as RayonDataRow[]) || [];
+  const rows = (allData as (RayonRow & GroupeRow)[]) || [];
 
   // Fonction de normalisation pour comparaison
   const normalize = (str: string) => 

@@ -6,9 +6,11 @@ import { Edit2, Trash2 } from "lucide-react";
 import EditProductModal from "./EditProductModal";
 import DeleteProductModal from "./DeleteProductModal";
 
+import { Product } from "@/types/database";
+
 interface Props {
   ean: string;
-  produit: any;
+  produit: Product | null;
   isUnknown: boolean;
 }
 

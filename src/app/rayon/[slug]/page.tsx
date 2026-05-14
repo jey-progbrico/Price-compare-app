@@ -1,6 +1,7 @@
 import { supabase } from "@/lib/supabase";
 import { Package, ChevronLeft, ArrowRight, Layers } from "lucide-react";
 import Link from "next/link";
+import { RayonRow, GroupeRow } from "@/types/database";
 
 export const dynamic = "force-dynamic";
 
@@ -15,7 +16,7 @@ export default async function RayonPage({ params }: { params: Promise<{ slug: st
     .select("rayon")
     .not("rayon", "is", null);
 
-  const rayonsUniques = Array.from(new Set(allRayons?.map(r => r.rayon) || []));
+  const rayonsUniques = Array.from(new Set((allRayons as RayonRow[] | null)?.map(r => r.rayon || "") || []));
   
   // Fonction de normalisation pour comparaison
   const normalize = (str: string) => 
@@ -26,7 +27,7 @@ export default async function RayonPage({ params }: { params: Promise<{ slug: st
 
   // Trouver le rayon qui correspond au slug
   const rayonName = rayonsUniques.find(r => 
-    normalize(r!) === normalize(slug)
+    normalize(r) === normalize(slug)
   ) || decodeURIComponent(slug).replace(/-/g, ' ');
 
   console.log(`[NAV DEBUG] Rayon converti : "${rayonName}"`);
@@ -43,9 +44,9 @@ export default async function RayonPage({ params }: { params: Promise<{ slug: st
     console.error(error);
   }
 
-  const uniqueGroupes = Array.from(new Set(groupes?.map(g => g.groupe_produit) || [])).map(name => ({
+  const uniqueGroupes = Array.from(new Set((groupes as GroupeRow[] | null)?.map(g => g.groupe_produit || "") || [])).map(name => ({
     name,
-    slug: encodeURIComponent(name!.toLowerCase().replace(/\s+/g, '-'))
+    slug: encodeURIComponent(name.toLowerCase().replace(/\s+/g, '-'))
   }));
 
   return (
