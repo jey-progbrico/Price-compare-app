@@ -48,7 +48,7 @@ export default function CreateProductModal({ isOpen, onClose, initialRayon, onSu
 
   const fetchRayons = async () => {
     const { data } = await supabase.from("produits").select("rayon").not("rayon", "is", null);
-    const unique = Array.from(new Set((data as RayonRow[] | null)?.map(r => r.rayon) || []));
+    const unique = Array.from(new Set((data as RayonRow[] | null)?.map(r => r.rayon).filter((r): r is string => !!r) || []));
     setRayons(unique);
   };
 

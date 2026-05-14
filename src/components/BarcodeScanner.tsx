@@ -20,6 +20,7 @@ import {
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "@/lib/supabase";
+import { RayonRow } from "@/types/database";
 
 export default function BarcodeScanner({ onClose }: { onClose: () => void }) {
   const router = useRouter();
@@ -70,8 +71,8 @@ export default function BarcodeScanner({ onClose }: { onClose: () => void }) {
     const fetchRayons = async () => {
       try {
         const { data } = await supabase.from("produits").select("rayon").not("rayon", "is", null);
-        const unique = Array.from(new Set(data?.map(r => r.rayon) || []));
-        setRayons(unique as string[]);
+        const unique = Array.from(new Set((data as RayonRow[] | null)?.map(r => r.rayon).filter((r): r is string => !!r) || []));
+        setRayons(unique);
       } catch (err) {
         console.error("Error fetching rayons:", err);
       }

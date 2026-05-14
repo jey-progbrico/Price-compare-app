@@ -24,7 +24,7 @@ export async function GET(request: NextRequest) {
     const rawResults = await rechercherDuckDuckGo(q);
     
     // Transformation en SearchResult compatibles frontend
-    const results: any[] = rawResults.map(r => {
+    const results = rawResults.map(r => {
       // Déduction simple de l'enseigne pour le frontend
       const domain = new URL(r.url).hostname.replace('www.', '');
       const parts = domain.split('.');
