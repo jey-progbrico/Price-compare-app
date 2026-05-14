@@ -253,13 +253,6 @@ export default async function Home() {
             </div>
           </section>
         </div>
-
-        {/* Bouton de Scan Flottant Principal */}
-        <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-40 lg:hidden">
-          <Link href="/produits" className="w-16 h-16 bg-red-600 rounded-[2rem] flex items-center justify-center text-white shadow-[0_20px_50px_rgba(220,38,38,0.3)] border-4 border-black active:scale-90 transition-all">
-            <ScanBarcode className="w-8 h-8" />
-          </Link>
-        </div>
       </div>
     </main>
   );

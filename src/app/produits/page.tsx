@@ -50,10 +50,10 @@ function ProduitsPageContent() {
 
         <button 
           onClick={() => setShowCreateModal(true)}
-          className="flex items-center gap-3 bg-red-600 hover:bg-red-500 text-white px-6 py-4 rounded-2xl font-black transition-all shadow-lg shadow-red-600/20 active:scale-95"
+          className="flex items-center gap-2 lg:gap-3 bg-red-600 hover:bg-red-500 text-white px-4 py-2.5 lg:px-6 lg:py-4 rounded-xl lg:rounded-2xl font-black text-[10px] lg:text-sm transition-all shadow-lg shadow-red-600/20 active:scale-95 shrink-0 uppercase tracking-widest"
         >
-          <Plus className="w-5 h-5" />
-          NOUVEAU PRODUIT
+          <Plus className="w-3.5 h-3.5 lg:w-5 lg:h-5" />
+          NOUVEAU
         </button>
       </div>
 
