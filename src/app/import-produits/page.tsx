@@ -22,6 +22,11 @@ export default function ImportProduitsPage() {
   const router = useRouter();
   const { profile, loading: profileLoading, isAdmin, isAdherant } = useProfile();
   
+  const [file, setFile] = useState<File | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState<{ success: boolean; count?: number; error?: string; details?: string[] } | null>(null);
+  const [dragActive, setDragActive] = useState(false);
+
   useEffect(() => {
     if (!profileLoading && !isAdmin && !isAdherant) {
       router.push("/produits");
@@ -38,10 +43,6 @@ export default function ImportProduitsPage() {
       </div>
     );
   }
-  const [file, setFile] = useState<File | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<{ success: boolean; count?: number; error?: string; details?: string[] } | null>(null);
-  const [dragActive, setDragActive] = useState(false);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
