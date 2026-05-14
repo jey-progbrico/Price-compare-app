@@ -321,8 +321,7 @@ export default function ParametresPage() {
       </div>
 
       {/* 2. OUTILS TERRAIN */}
-      {canSeeCache && (
-        <div className="space-y-8">
+      <div className="space-y-8">
           <section className="space-y-3">
             <div className="flex items-center gap-2 px-1">
               <Zap className="w-4 h-4 text-yellow-500" />
@@ -374,7 +373,6 @@ export default function ParametresPage() {
             </div>
           </section>
         </div>
-      )}
 
       {canImport && (
         <section className="space-y-3">
