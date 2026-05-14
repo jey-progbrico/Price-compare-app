@@ -27,11 +27,12 @@ import ExportModal from "./ExportModal";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import { showToast } from "@/components/Toast";
+import { useProfile } from "@/hooks/useProfile";
 
 export default function ParametresPage() {
   const router = useRouter();
   const supabase = createClient();
-  const [user, setUser] = useState<any>(null);
+  const { profile, loading: profileLoading } = useProfile();
   const [cacheDuration, setCacheDuration] = useState("7");
   const [priceThreshold, setPriceThreshold] = useState("0.50");
   const [loading, setLoading] = useState(false);
@@ -51,11 +52,6 @@ export default function ParametresPage() {
   const [passError, setPassError] = useState<string | null>(null);
 
   useEffect(() => {
-    const fetchUser = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      setUser(user);
-    };
-
     const fetchStats = async () => {
       const { count } = await supabase.from("releves_prix").select("*", { count: 'exact', head: true });
       setRelevesCount(count || 0);
@@ -78,7 +74,6 @@ export default function ParametresPage() {
       }
     };
 
-    fetchUser();
     fetchStats();
     fetchSettings();
     setCacheCount(124);
@@ -397,10 +392,18 @@ export default function ParametresPage() {
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-[10px] font-black text-neutral-600 uppercase tracking-[0.2em] mb-1">Session Active</p>
-              <h3 className="text-xl font-black text-white truncate mb-2">{user?.email || "Chargement..."}</h3>
+              <h3 className="text-xl font-black text-white truncate mb-2">
+                {profileLoading ? (
+                  <span className="opacity-20 animate-pulse">Chargement...</span>
+                ) : (
+                  profile?.email
+                )}
+              </h3>
               <div className="flex items-center justify-center sm:justify-start gap-2">
                 <div className="w-1.5 h-1.5 rounded-full bg-emerald-500/50" />
-                <span className="text-[9px] font-bold text-neutral-500 uppercase tracking-widest">{user?.role || 'Opérateur'} Authentifié</span>
+                <span className="text-[9px] font-bold text-neutral-500 uppercase tracking-widest">
+                  {profile?.role || 'Utilisateur'} Authentifié
+                </span>
               </div>
             </div>
             
