@@ -267,9 +267,9 @@ export default function SupportBubble() {
         }`}
       >
         {isOpen ? <X className="w-6 h-6" /> : <MessageCircle className="w-6 h-6 group-hover:scale-110 transition-transform" />}
-        {!isOpen && conversation?.unread_count_user > 0 && (
+        {!isOpen && (conversation?.unread_count_user ?? 0) > 0 && (
           <div className="absolute -top-1 -right-1 w-5 h-5 bg-emerald-500 border-2 border-[#0a0a0c] rounded-full flex items-center justify-center text-[10px] font-black">
-            {conversation.unread_count_user}
+            {conversation?.unread_count_user}
           </div>
         )}
       </button>
