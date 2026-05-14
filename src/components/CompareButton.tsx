@@ -164,13 +164,14 @@ function PriceDisplay({ prix, prix_precedent, internalPrice }: {
 
 // ─── Carte de veille manuelle (Remplace LinkOnlyCard et PriceResultCard) ──────
 
-function ManualVeilleCard({ res, index, ean, internalPrice, releveId, onDelete }: {
+function ManualVeilleCard({ res, index, ean, internalPrice, releveId, onDelete, isStandardUser }: {
   res: SearchResult;
   index: number;
   ean: string;
   internalPrice?: number | null;
   releveId?: string;
   onDelete?: (id: string) => void;
+  isStandardUser?: boolean;
 }) {
   // Initialiser avec le prix existant si présent (conversion string pour l'input)
   const [prix, setPrix] = useState<string>(res.prix != null ? res.prix.toString() : "");
@@ -525,6 +526,7 @@ export default function CompareButton({
                 internalPrice={internalPrice}
                 releveId={rel.id}
                 onDelete={handleDeleteReleve}
+                isStandardUser={isStandardUser}
               />
             ))}
           </div>
@@ -550,6 +552,7 @@ export default function CompareButton({
                 index={i}
                 ean={ean}
                 internalPrice={internalPrice}
+                isStandardUser={isStandardUser}
               />
             ))}
           </div>
