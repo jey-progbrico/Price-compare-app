@@ -26,9 +26,7 @@ export interface ProduitHistorique {
   devise: string | null;
   created_at: string | null;
   // Données jointes depuis cache_prix
-  enseignes: string[];
   meilleur_prix_concurrent: number | null;
-  derniere_maj_cache: string | null;
 }
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
@@ -374,26 +372,9 @@ function ProductCard({
         <div className="flex items-end justify-between gap-2">
           {/* Enseignes trouvées */}
           <div className="flex-1 min-w-0">
-            {produit.enseignes.length > 0 ? (
-              <div className="flex items-center gap-1.5 flex-wrap">
-                <Store className="w-3 h-3 text-neutral-600 flex-shrink-0" />
-                {produit.enseignes.slice(0, 3).map((e) => (
-                  <span
-                    key={e}
-                    className="text-[10px] bg-neutral-800/80 text-neutral-400 px-1.5 py-0.5 rounded-md font-medium"
-                  >
-                    {e}
-                  </span>
-                ))}
-                {produit.enseignes.length > 3 && (
-                  <span className="text-[10px] text-neutral-600">
-                    +{produit.enseignes.length - 3}
-                  </span>
-                )}
-              </div>
-            ) : (
+            {!produit.meilleur_prix_concurrent && (
               <span className="text-[10px] text-neutral-700 italic">
-                Aucun concurrent trouvé
+                Aucun relevé concurrent
               </span>
             )}
           </div>

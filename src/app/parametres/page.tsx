@@ -40,12 +40,10 @@ export default function ParametresPage() {
   const { profile, loading: profileLoading, isAdmin, isAdherant, isManager, isStandardUser } = useProfile();
   const canImport = isAdmin || isAdherant;
   const canExport = true; // Tout le monde peut exporter (ses propres données ou tout)
-  const canSeeCache = isAdmin || isAdherant; // Cache et outils techniques réservés Admin/Adh
+  const canMaintain = isAdmin || isAdherant; // Outils de maintenance réservés Admin/Adh
   
-  const [cacheDuration, setCacheDuration] = useState("7");
   const [priceThreshold, setPriceThreshold] = useState("0.50");
   const [loading, setLoading] = useState(false);
-  const [cacheCount, setCacheCount] = useState(0);
   const [showExportModal, setShowExportModal] = useState(false);
   const [rayons, setRayons] = useState<string[]>([]);
   const [relevesCount, setRelevesCount] = useState(0);
@@ -84,7 +82,6 @@ export default function ParametresPage() {
         const res = await fetch("/api/settings");
         if (res.ok) {
           const data = await res.json();
-          if (data.cache_duration) setCacheDuration(data.cache_duration);
           if (data.price_threshold) setPriceThreshold(data.price_threshold);
         }
       } catch (err) {
@@ -94,7 +91,6 @@ export default function ParametresPage() {
 
     fetchStats();
     fetchSettings();
-    setCacheCount(124);
   }, [profile]);
 
   const handleLogout = async () => {
@@ -165,11 +161,6 @@ export default function ParametresPage() {
     }
   };
 
-  const handleCacheDurationChange = (d: string) => {
-    setCacheDuration(d);
-    saveSetting("cache_duration", d);
-  };
-
   const handlePriceThresholdChange = (val: string) => {
     setPriceThreshold(val);
     saveSetting("price_threshold", val);
@@ -182,14 +173,6 @@ export default function ParametresPage() {
     showToast("Bookmarklet copié !", "success");
   };
 
-  const clearCache = async () => {
-    if (!confirm("Voulez-vous vider le cache automatique ?")) return;
-    setLoading(true);
-    setTimeout(() => {
-      setLoading(false);
-      showToast("Cache vidé", "success");
-    }, 1000);
-  };
 
   const handlePurgeReleves = async () => {
     if (!confirm("ATTENTION : Cette action supprimera DÉFINITIVEMENT tous les relevés de prix de la base de données. Continuer ?")) return;
@@ -262,52 +245,14 @@ export default function ParametresPage() {
           </div>
         </section>
 
-        {canSeeCache && (
+        {canMaintain && (
           <section className="space-y-3">
             <div className="flex items-center gap-2 px-1">
-              <Database className="w-4 h-4 text-blue-500" />
-              <h2 className="text-xs font-black text-neutral-400 uppercase tracking-widest">Gestion du Cache</h2>
+              <Database className="w-4 h-4 text-red-500" />
+              <h2 className="text-xs font-black text-neutral-400 uppercase tracking-widest">Maintenance Système</h2>
             </div>
             <div className="bg-neutral-900 border border-neutral-800 rounded-3xl overflow-hidden divide-y divide-neutral-800/50 shadow-xl">
-              <div className="p-5 flex justify-between items-center bg-blue-950/5">
-                <div>
-                  <div className="text-sm font-bold text-white">Éléments en cache</div>
-                  <div className="text-[10px] text-neutral-500 uppercase tracking-tighter">Suggestions DuckDuckGo mémorisées</div>
-                </div>
-                <span className="text-lg font-black text-white">{cacheCount}</span>
-              </div>
-
-              <div className="p-5 space-y-3">
-                <label className="text-[10px] font-bold text-neutral-500 uppercase block tracking-widest">Durée de conservation</label>
-                <div className="grid grid-cols-3 gap-2">
-                  {["7", "14", "30"].map(d => (
-                    <button
-                      key={d}
-                      onClick={() => handleCacheDurationChange(d)}
-                      className={`py-3 rounded-xl text-xs font-bold border transition-all ${
-                        cacheDuration === d 
-                          ? "bg-blue-600 border-blue-500 text-white shadow-lg shadow-blue-600/20" 
-                          : "bg-black border-neutral-800 text-neutral-500 hover:border-neutral-700"
-                      }`}
-                    >
-                      {d} jours
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="p-5">
-                <button 
-                  onClick={clearCache}
-                  disabled={loading}
-                  className="w-full bg-neutral-950 border border-red-900/30 text-red-500 font-bold py-4 rounded-2xl flex items-center justify-center gap-2 active:scale-95 transition-all hover:bg-red-950/10"
-                >
-                  {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
-                  Vider le cache automatique
-                </button>
-              </div>
-
-              <div className="p-5 bg-red-950/10 border-t border-red-900/20 space-y-4">
+              <div className="p-5 bg-red-950/10 space-y-4">
                 <button 
                   onClick={handlePurgeReleves}
                   disabled={loading}

@@ -406,7 +406,7 @@ export default function CompareButton({
   produit?: Product | null;
 }) {
   const { isStandardUser } = useProfile();
-  const [phase, setPhase] = useState<"idle" | "cache_check" | "done">("cache_check");
+  const [phase, setPhase] = useState<"idle" | "done">("idle");
   const [results, setResults] = useState<SearchResult[]>([]);
   const [releves, setReleves] = useState<PriceLog[]>([]);
   
@@ -418,17 +418,8 @@ export default function CompareButton({
     }
 
     const fetchData = async () => {
-      setPhase("cache_check");
       try {
-        const [resCache, resReleves] = await Promise.all([
-          fetch(`/api/cache?ean=${encodeURIComponent(ean)}&stale=1`),
-          fetch(`/api/releves?ean=${encodeURIComponent(ean)}`)
-        ]);
-
-        if (resCache.ok) {
-          const data = await resCache.json();
-          if (data.results) setResults(data.results);
-        }
+        const resReleves = await fetch(`/api/releves?ean=${encodeURIComponent(ean)}`);
 
         if (resReleves.ok) {
           const data = await resReleves.json();
@@ -534,30 +525,6 @@ export default function CompareButton({
         </div>
       )}
 
-      {/* ── Résultats de discovery (Cache existant) ────────────────────────── */}
-      {results.length > 0 && (
-        <div className="space-y-3">
-          <div className="flex items-center gap-2 mb-1 px-1">
-            <h3 className="text-sm font-bold text-white opacity-60">Liens suggérés (Historique web)</h3>
-            <span className="text-[10px] bg-neutral-800 text-neutral-500 px-1.5 py-0.5 rounded font-mono">
-              {results.length}
-            </span>
-          </div>
-          
-          <div className="space-y-3">
-            {results.map((res, i) => (
-              <ManualVeilleCard
-                key={res.lien}
-                res={res}
-                index={i}
-                ean={ean}
-                internalPrice={internalPrice}
-                isStandardUser={isStandardUser}
-              />
-            ))}
-          </div>
-        </div>
-      )}
     </div>
   );
 }

@@ -34,28 +34,16 @@ export default async function Home() {
     { count: totalProduits },
     { count: totalReleves },
     { data: rawRayons },
-    { data: rawConcurrents },
     { data: activities }
   ] = await Promise.all([
     supabase.from("produits").select("*", { count: "exact", head: true }),
     supabase.from("releves_prix").select("*", { count: "exact", head: true }),
     supabase.from("produits").select("rayon").not("rayon", "is", null),
-    supabase.from("cache_prix").select("enseigne").not("enseigne", "is", null),
     supabase.from("historique_activites").select("*").order("created_at", { ascending: false }).limit(8)
   ]);
 
   const totalRayons = new Set((rawRayons as RayonRow[] | null)?.map(r => r.rayon) || []).size;
-  const totalConcurrents = new Set((rawConcurrents as ConcurrentRow[] | null)?.map(c => c.enseigne) || []).size;
   const typedActivities = (activities as ActivityRow[] | null) || [];
-
-  // 2. Historique pour le mobile (reprise rapide)
-  const { data: recents } = await supabase
-    .from("cache_prix")
-    .select("ean, titre, prix, enseigne, updated_at")
-    .order("updated_at", { ascending: false })
-    .limit(10);
-  
-  const uniqueRecents = Array.from(new Map((recents as RecentProduct[] | null)?.map(item => [item.ean, item]) || []).values()).slice(0, 5);
 
   // 3. Récupérer le rôle de l'utilisateur
   const { data: { user } } = await supabase.auth.getUser();
@@ -109,11 +97,10 @@ export default async function Home() {
           </div>
 
         {/* Grille KPI */}
-        <div className="grid grid-cols-4 gap-6">
+        <div className="grid grid-cols-3 gap-6">
           <StatCard title="Produits" value={totalProduits || 0} icon={<Package className="w-5 h-5" />} trend="+12% ce mois" />
           <StatCard title="Relevés Prix" value={totalReleves || 0} icon={<BarChart3 className="w-5 h-5" />} trend="Activité forte" />
           <StatCard title="Rayons" value={totalRayons} icon={<Layers className="w-5 h-5" />} color="red" />
-          <StatCard title="Enseignes" value={totalConcurrents} icon={<TrendingUp className="w-5 h-5" />} />
         </div>
 
         {/* Barre de Recherche Globale */}
