@@ -15,6 +15,7 @@ const geistMono = Geist_Mono({
 import BottomNav from "@/components/BottomNav";
 import DesktopSidebar from "@/components/DesktopSidebar";
 import ToastContainer from "@/components/Toast";
+import { createClient } from "@/lib/supabase/server";
 
 export const metadata: Metadata = {
   title: "VigiPrix : Veille Terrain",
@@ -35,32 +36,37 @@ export const viewport = {
   userScalable: false,
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+
   return (
     <html
       lang="fr"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased bg-[#0a0a0c]`}
     >
       <body className="min-h-full flex flex-row text-neutral-200">
-        {/* Sidebar Desktop */}
-        <DesktopSidebar />
+        {/* Sidebar Desktop - Only shown if user is logged in */}
+        {user && <DesktopSidebar user={user} />}
 
         {/* Main Content Area */}
         <div className="flex-1 flex flex-col min-h-screen relative overflow-x-hidden">
-          <main className="flex-1 w-full max-w-7xl mx-auto lg:mx-0 lg:max-w-none pb-24 lg:pb-8 sm:px-6 lg:px-12">
-            <div className="max-w-md mx-auto lg:max-w-none">
+          <main className={`flex-1 w-full ${user ? "max-w-7xl mx-auto lg:mx-0 lg:max-w-none pb-24 lg:pb-8 sm:px-6 lg:px-12" : ""}`}>
+            <div className={user ? "max-w-md mx-auto lg:max-w-none" : "w-full h-full"}>
               {children}
             </div>
           </main>
           
-          {/* Navigation Mobile */}
-          <div className="lg:hidden">
-            <BottomNav />
-          </div>
+          {/* Navigation Mobile - Only shown if user is logged in */}
+          {user && (
+            <div className="lg:hidden">
+              <BottomNav />
+            </div>
+          )}
           
           <ToastContainer />
         </div>
