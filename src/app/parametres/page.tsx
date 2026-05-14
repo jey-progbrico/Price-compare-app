@@ -30,6 +30,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import { showToast } from "@/components/Toast";
 import { useProfile } from "@/hooks/useProfile";
+import CatalogResetModal from "./CatalogResetModal";
 
 import { RayonRow } from "@/types/database";
 
@@ -58,6 +59,9 @@ export default function ParametresPage() {
   const [showNewPass, setShowNewPass] = useState(false);
   const [updatingPass, setUpdatingPass] = useState(false);
   const [passError, setPassError] = useState<string | null>(null);
+
+  // Catalog Reset state
+  const [showResetModal, setShowResetModal] = useState(false);
 
   useEffect(() => {
     const fetchStats = async () => {
@@ -303,15 +307,25 @@ export default function ParametresPage() {
                 </button>
               </div>
 
-              <div className="p-5 bg-red-950/10 border-t border-red-900/20">
+              <div className="p-5 bg-red-950/10 border-t border-red-900/20 space-y-4">
                 <button 
                   onClick={handlePurgeReleves}
+                  disabled={loading}
+                  className="w-full bg-red-600/10 hover:bg-red-600/20 border border-red-900/40 text-red-500 font-bold py-4 rounded-2xl flex items-center justify-center gap-3 active:scale-95 transition-all disabled:opacity-50"
+                >
+                  {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                  PURGER TOUS LES RELEVÉS
+                </button>
+
+                <button 
+                  onClick={() => setShowResetModal(true)}
                   disabled={loading}
                   className="w-full bg-red-600 hover:bg-red-500 text-white font-black py-4 rounded-2xl flex items-center justify-center gap-3 active:scale-95 transition-all shadow-lg shadow-red-600/10 disabled:opacity-50"
                 >
                   {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <AlertCircle className="w-5 h-5" />}
-                  VIDER TOUS LES RELEVÉS
+                  RÉINITIALISER LE CATALOGUE
                 </button>
+
                 <p className="text-[9px] text-red-500 font-black uppercase tracking-[0.1em] text-center mt-3 animate-pulse">
                   Action irréversible • Zone de danger
                 </p>
@@ -692,6 +706,15 @@ export default function ParametresPage() {
         isOpen={showExportModal} 
         onClose={() => setShowExportModal(false)} 
         rayons={rayons} 
+      />
+
+      <CatalogResetModal 
+        isOpen={showResetModal}
+        onClose={() => setShowResetModal(false)}
+        onSuccess={() => {
+          setRelevesCount(0);
+          setRayons([]);
+        }}
       />
     </main>
   );
