@@ -13,8 +13,13 @@ export async function GET() {
 
     if (error) throw error;
 
+    interface SettingRow {
+      key: string;
+      value: string;
+    }
+
     // Convertir en objet simple { [key]: value }
-    const settings = data.reduce((acc: any, curr) => {
+    const settings = (data as SettingRow[]).reduce<Record<string, string>>((acc, curr) => {
       acc[curr.key] = curr.value;
       return acc;
     }, {});
