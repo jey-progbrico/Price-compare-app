@@ -91,24 +91,38 @@ export async function POST(request: NextRequest) {
     }
 
     // 1. Créer l'utilisateur dans auth.users via l'API Admin
+    console.log("[API-ADMIN-USERS] Étape 1: Création auth.user pour:", email);
     const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
       email,
       password,
       email_confirm: true,
-      user_metadata: { role } // Optionnel: utile pour les triggers
+      user_metadata: { role }
     });
 
-    if (createError) throw createError;
+    if (createError) {
+      console.error("[API-ADMIN-USERS] Erreur Étape 1 (auth.admin.createUser):", createError);
+      throw createError;
+    }
+    console.log("[API-ADMIN-USERS] Étape 1 Réussie. UID:", newUser.user.id);
 
-    // 2. Vérifier si un profile a été créé par un trigger SQL
-    // S'il n'y a pas de trigger, on le crée manuellement ici
-    const { data: existingProfile } = await supabaseAdmin
+    // 2. Attendre un court instant pour laisser le trigger éventuel s'exécuter
+    await new Promise(resolve => setTimeout(resolve, 500));
+
+    // 3. Vérifier si un profile a été créé par un trigger SQL
+    console.log("[API-ADMIN-USERS] Étape 3: Vérification existence profil UID:", newUser.user.id);
+    const { data: existingProfile, error: fetchProfileError } = await supabaseAdmin
       .from("profiles")
-      .select("id")
+      .select("*")
       .eq("id", newUser.user.id)
-      .single();
+      .maybeSingle();
+
+    if (fetchProfileError) {
+      console.error("[API-ADMIN-USERS] Erreur Étape 3 (check profile):", fetchProfileError);
+      // On ne throw pas forcément ici, on tente quand même la suite ou le nettoyage
+    }
 
     if (!existingProfile) {
+      console.log("[API-ADMIN-USERS] Étape 4: Profil inexistant, création manuelle...");
       const { error: profileError } = await supabaseAdmin
         .from("profiles")
         .insert([
@@ -120,23 +134,41 @@ export async function POST(request: NextRequest) {
         ]);
       
       if (profileError) {
+        console.error("[API-ADMIN-USERS] Erreur Étape 4 (insert profile):", profileError);
         // Nettoyage si échec de la création du profil
+        console.log("[API-ADMIN-USERS] Nettoyage: suppression auth.user UID:", newUser.user.id);
         await supabaseAdmin.auth.admin.deleteUser(newUser.user.id);
         throw profileError;
       }
+      console.log("[API-ADMIN-USERS] Étape 4 Réussie (Insert manuel).");
     } else {
+      console.log("[API-ADMIN-USERS] Étape 5: Profil existant (Trigger), mise à jour du rôle:", role);
       // Si le profil existe (via trigger), on s'assure que le rôle est correct
       const { error: updateError } = await supabaseAdmin
         .from("profiles")
         .update({ role })
         .eq("id", newUser.user.id);
       
-      if (updateError) throw updateError;
+      if (updateError) {
+        console.error("[API-ADMIN-USERS] Erreur Étape 5 (update role):", updateError);
+        throw updateError;
+      }
+      console.log("[API-ADMIN-USERS] Étape 5 Réussie (Update trigger profile).");
     }
 
     return NextResponse.json({ success: true, user: newUser.user });
   } catch (err: any) {
-    console.error("[API-ADMIN-USERS] Erreur:", err.message);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    console.error("[API-ADMIN-USERS] Erreur fatale capturée:", {
+      message: err.message,
+      code: err.code,
+      details: err.details,
+      hint: err.hint,
+      error_object: err
+    });
+    return NextResponse.json({ 
+      error: err.message || "Erreur lors de la création",
+      details: err.details,
+      code: err.code
+    }, { status: 500 });
   }
 }
