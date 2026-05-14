@@ -22,6 +22,10 @@ function ProduitsPageContent() {
   // Fetch unique rayons on client side since we need state for the modal
   useEffect(() => {
     const fetchRayons = async () => {
+      interface RayonRow {
+        rayon: string;
+      }
+      
       const { data } = await supabase
         .from("produits")
         .select("rayon")
@@ -29,9 +33,10 @@ function ProduitsPageContent() {
         .order("rayon", { ascending: true });
       
       if (data) {
-        const unique = Array.from(new Set(data.map(r => r.rayon))).map(name => ({
-          name: name as string,
-          slug: encodeURIComponent(name!.toLowerCase().replace(/\s+/g, '-'))
+        const rows = data as RayonRow[];
+        const unique = Array.from(new Set(rows.map(r => r.rayon))).map(name => ({
+          name: name,
+          slug: encodeURIComponent(name.toLowerCase().replace(/\s+/g, '-'))
         }));
         setRayons(unique);
       }
