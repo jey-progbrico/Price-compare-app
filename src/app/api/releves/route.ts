@@ -89,6 +89,24 @@ export async function POST(request: NextRequest) {
  * Supprime un relevé de prix spécifique.
  */
 export async function DELETE(request: NextRequest) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+
+  if (!user) {
+    return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
+  }
+
+  // Vérifier le rôle
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", user.id)
+    .single();
+
+  if (profile?.role === "utilisateur") {
+    return NextResponse.json({ error: "Permission refusée : les utilisateurs ne peuvent pas supprimer de relevés." }, { status: 403 });
+  }
+
   const { searchParams } = new URL(request.url);
   const id = searchParams.get("id");
 
@@ -97,7 +115,6 @@ export async function DELETE(request: NextRequest) {
   }
 
   try {
-    const supabase = await createClient();
     const { error } = await supabase
       .from("releves_prix")
       .delete()

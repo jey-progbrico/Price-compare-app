@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 
 import { Product, PriceLog } from "@/types/database";
+import { useProfile } from "@/hooks/useProfile";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -285,7 +286,7 @@ function ManualVeilleCard({ res, index, ean, internalPrice, releveId, onDelete }
             <ExternalLink className="w-4 h-4" />
           </a>
 
-          {releveId && onDelete && (
+          {releveId && onDelete && !isStandardUser && (
             <button
               onClick={() => {
                 if (confirm("Supprimer ce relevé ?")) {
@@ -403,6 +404,7 @@ export default function CompareButton({
   onManualPriceClick?: (enseigne: string, lien: string, titre: string) => void;
   produit?: Product | null;
 }) {
+  const { isStandardUser } = useProfile();
   const [phase, setPhase] = useState<"idle" | "cache_check" | "done">("cache_check");
   const [results, setResults] = useState<SearchResult[]>([]);
   const [releves, setReleves] = useState<PriceLog[]>([]);
