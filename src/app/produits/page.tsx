@@ -31,10 +31,12 @@ function ProduitsPageContent() {
       
       if (data) {
         const rows = data as RayonRow[];
-        const unique = Array.from(new Set(rows.map(r => r.rayon))).map(name => ({
-          name: name,
-          slug: encodeURIComponent(name.toLowerCase().replace(/\s+/g, '-'))
-        }));
+        const unique = Array.from(new Set(rows.map(r => r.rayon)))
+          .filter((name): name is string => !!name)
+          .map(name => ({
+            name: name,
+            slug: encodeURIComponent(name.toLowerCase().replace(/\s+/g, '-'))
+          }));
         setRayons(unique);
       }
       setLoading(false);
