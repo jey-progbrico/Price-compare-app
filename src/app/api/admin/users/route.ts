@@ -172,3 +172,66 @@ export async function POST(request: NextRequest) {
     }, { status: 500 });
   }
 }
+
+/**
+ * PATCH /api/admin/users
+ * Réinitialise le mot de passe d'un utilisateur (Admin seulement).
+ */
+export async function PATCH(request: NextRequest) {
+  const supabase = await createServerClient();
+  const { data: { user: caller } } = await supabase.auth.getUser();
+
+  if (!caller) {
+    return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
+  }
+
+  // Vérifier le rôle de l'appelant
+  const { data: callerProfile } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", caller.id)
+    .single();
+
+  if (callerProfile?.role !== "admin") {
+    return NextResponse.json({ error: "Accès refusé" }, { status: 403 });
+  }
+
+  try {
+    const body = await request.json();
+    const { userId, password } = body;
+
+    if (!userId || !password) {
+      return NextResponse.json({ error: "Données manquantes" }, { status: 400 });
+    }
+
+    if (password.length < 6) {
+      return NextResponse.json({ error: "Mot de passe trop court (min 6 caractères)" }, { status: 400 });
+    }
+
+    // Empêcher l'admin de modifier son propre mot de passe via cet endpoint (sécurité)
+    // S'il veut changer son pass, il doit passer par le flux standard de changement de pass
+    // (Optionnel, mais plus sûr pour éviter les erreurs de manipulation sur son propre compte admin)
+    // if (userId === caller.id) {
+    //   return NextResponse.json({ error: "Utilisez les paramètres personnels pour changer votre mot de passe" }, { status: 400 });
+    // }
+
+    console.log("[API-ADMIN-USERS] Reset mot de passe pour UID:", userId);
+    const { error: updateError } = await supabaseAdmin.auth.admin.updateUserById(
+      userId,
+      { password }
+    );
+
+    if (updateError) {
+      console.error("[API-ADMIN-USERS] Erreur reset password:", updateError);
+      throw updateError;
+    }
+
+    return NextResponse.json({ success: true, message: "Mot de passe mis à jour avec succès" });
+  } catch (err: any) {
+    console.error("[API-ADMIN-USERS] Erreur fatale PATCH:", err);
+    return NextResponse.json({ 
+      error: err.message || "Erreur lors de la mise à jour du mot de passe",
+      code: err.code
+    }, { status: 500 });
+  }
+}

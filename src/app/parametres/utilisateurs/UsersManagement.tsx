@@ -14,16 +14,24 @@ import {
   User,
   ShieldCheck,
   UserCheck,
-  UserCog
+  UserCog,
+  KeyRound,
+  X
 } from "lucide-react";
 import { showToast } from "@/components/Toast";
 import { UserProfile, UserRole } from "@/hooks/useProfile";
+import { motion, AnimatePresence } from "framer-motion";
 
 export default function UsersManagement() {
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
+
+  // Reset password state
+  const [resetTarget, setResetTarget] = useState<UserProfile | null>(null);
+  const [newPassword, setNewPassword] = useState("");
+  const [resetting, setResetting] = useState(false);
 
   // Form state
   const [email, setEmail] = useState("");
@@ -77,6 +85,39 @@ export default function UsersManagement() {
       showToast("Erreur de connexion au serveur", "error");
     } finally {
       setCreating(false);
+    }
+  };
+
+  const handleResetPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!resetTarget || !newPassword) return;
+
+    if (newPassword.length < 6) {
+      showToast("Le mot de passe doit faire au moins 6 caractères", "error");
+      return;
+    }
+
+    setResetting(true);
+    try {
+      const res = await fetch("/api/admin/users", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: resetTarget.id, password: newPassword }),
+      });
+
+      const data = await res.json();
+
+      if (res.ok) {
+        showToast(`Mot de passe de ${resetTarget.email} réinitialisé`, "success");
+        setResetTarget(null);
+        setNewPassword("");
+      } else {
+        showToast(data.error || "Erreur lors de la réinitialisation", "error");
+      }
+    } catch (err) {
+      showToast("Erreur de connexion au serveur", "error");
+    } finally {
+      setResetting(false);
     }
   };
 
@@ -231,9 +272,19 @@ export default function UsersManagement() {
                     <div className="text-[10px] text-neutral-600 mt-0.5 font-medium">Membre depuis {new Date(user.created_at).toLocaleDateString('fr-FR')}</div>
                   </div>
                 </div>
-                <div className="flex items-center justify-between sm:justify-end gap-6">
+                <div className="flex items-center justify-between sm:justify-end gap-3 sm:gap-6">
                   {getRoleBadge(user.role)}
-                  <ChevronRight className="w-4 h-4 text-neutral-800 group-hover:text-neutral-600 transition-all" />
+                  <button
+                    onClick={() => {
+                      setResetTarget(user);
+                      setNewPassword("");
+                    }}
+                    className="p-2.5 rounded-xl bg-neutral-900 border border-neutral-800 text-neutral-500 hover:text-white hover:border-neutral-600 transition-all active:scale-90"
+                    title="Réinitialiser le mot de passe"
+                  >
+                    <KeyRound className="w-4 h-4" />
+                  </button>
+                  <ChevronRight className="w-4 h-4 text-neutral-800 group-hover:text-neutral-600 transition-all hidden sm:block" />
                 </div>
               </div>
             ))
@@ -241,6 +292,82 @@ export default function UsersManagement() {
         </div>
       </div>
 
+
+      {/* 4. MODAL RESET PASSWORD */}
+      <AnimatePresence>
+        {resetTarget && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setResetTarget(null)}
+              className="absolute inset-0 bg-black/80 backdrop-blur-sm"
+            />
+            
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="relative w-full max-w-md bg-neutral-900 border border-neutral-800 rounded-[2.5rem] shadow-2xl overflow-hidden"
+            >
+              <div className="p-8 space-y-6">
+                <div className="flex items-center justify-between">
+                  <div className="w-12 h-12 rounded-2xl bg-red-600/10 border border-red-600/20 flex items-center justify-center text-red-500">
+                    <KeyRound className="w-6 h-6" />
+                  </div>
+                  <button 
+                    onClick={() => setResetTarget(null)}
+                    className="p-2 rounded-full hover:bg-neutral-800 text-neutral-500 transition-colors"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                <div className="space-y-1">
+                  <h3 className="text-xl font-black text-white">Réinitialisation</h3>
+                  <p className="text-xs text-neutral-500 font-medium">Définir un nouveau mot de passe pour <span className="text-neutral-300">{resetTarget.email}</span></p>
+                </div>
+
+                <form onSubmit={handleResetPassword} className="space-y-6">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-neutral-500 uppercase tracking-widest px-1">Nouveau mot de passe temporaire</label>
+                    <div className="relative group">
+                      <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-600 group-focus-within:text-red-500 transition-colors" />
+                      <input 
+                        type="text" 
+                        required
+                        autoFocus
+                        value={newPassword}
+                        onChange={(e) => setNewPassword(e.target.value)}
+                        placeholder="Nouveau mot de passe"
+                        className="w-full bg-black border border-neutral-800 rounded-2xl pl-11 pr-4 py-4 text-sm text-white focus:border-red-600 outline-none transition-all"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setResetTarget(null)}
+                      className="flex-1 py-4 rounded-2xl bg-neutral-800 text-neutral-400 font-black text-xs uppercase tracking-widest hover:bg-neutral-700 transition-all"
+                    >
+                      Annuler
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={resetting}
+                      className="flex-[2] py-4 rounded-2xl bg-white text-black font-black text-xs uppercase tracking-widest hover:bg-neutral-200 transition-all disabled:opacity-50 flex items-center justify-center gap-2 shadow-xl shadow-white/5"
+                    >
+                      {resetting ? <Loader2 className="w-4 h-4 animate-spin" /> : <><CheckCircle2 className="w-4 h-4" /> Confirmer</>}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
