@@ -11,13 +11,9 @@ import {
   Settings, 
   Search,
   ScanLine,
-  Zap,
-  LogOut,
-  User
+  Zap
 } from "lucide-react";
 import { motion } from "framer-motion";
-import { createClient } from "@/lib/supabase/client";
-import { useRouter } from "next/navigation";
 
 const menuItems = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
@@ -28,16 +24,8 @@ const menuItems = [
   { href: "/parametres", label: "Paramètres", icon: Settings },
 ];
 
-export default function DesktopSidebar({ user }: { user: any }) {
+export default function DesktopSidebar() {
   const pathname = usePathname();
-  const router = useRouter();
-  const supabase = createClient();
-
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-    router.push("/login");
-    router.refresh();
-  };
 
   return (
     <aside className="hidden lg:flex flex-col w-72 bg-[#0d0d0f] border-r border-neutral-800/50 h-screen sticky top-0 z-50">
@@ -82,33 +70,15 @@ export default function DesktopSidebar({ user }: { user: any }) {
         })}
       </nav>
 
-      {/* User & Logout */}
-      <div className="p-4 border-t border-neutral-900 space-y-2">
-        <div className="flex items-center gap-3 px-4 py-3 bg-neutral-900/30 rounded-2xl border border-neutral-800/20">
-          <div className="w-8 h-8 rounded-full bg-neutral-800 flex items-center justify-center text-neutral-400">
-            <User className="w-4 h-4" />
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-[10px] font-black text-neutral-500 uppercase tracking-widest">Utilisateur</p>
-            <p className="text-xs font-bold text-white truncate">{user?.email}</p>
-          </div>
-        </div>
-        
-        <button
-          onClick={handleLogout}
-          className="w-full flex items-center gap-4 px-4 py-3.5 rounded-2xl text-neutral-500 hover:bg-red-500/10 hover:text-red-400 transition-all group"
-        >
-          <LogOut className="w-5 h-5 transition-transform group-hover:-translate-x-1" />
-          <span className="text-sm font-bold tracking-tight">Déconnexion</span>
-        </button>
-
-        <div className="bg-neutral-900/50 rounded-2xl p-4 border border-neutral-800/30 mt-4">
+      {/* Footer Info */}
+      <div className="p-6 border-t border-neutral-900">
+        <div className="bg-neutral-900/50 rounded-2xl p-4 border border-neutral-800/30">
           <div className="flex items-center gap-3 mb-2">
             <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
             <span className="text-[10px] font-black text-white uppercase tracking-widest">Système Live</span>
           </div>
           <p className="text-[11px] text-neutral-500 leading-relaxed">
-            Connecté en tant que<br/>{user?.role || 'Opérateur'}
+            Données synchronisées avec Supabase.
           </p>
         </div>
       </div>
