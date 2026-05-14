@@ -11,10 +11,17 @@ function ImportForm() {
   const [title, setTitle] = useState("");
   const [ean, setEan] = useState("");
   const [prix, setPrix] = useState("");
+  const [matchType, setMatchType] = useState<"exact" | "equivalent">("exact");
   const [loading, setLoading] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [isMounted, setIsMounted] = useState(false);
 
   useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
+  useEffect(() => {
+    // ... existing useEffect ...
     const urlParam = searchParams.get("url");
     const titleParam = searchParams.get("title");
     const textParam = searchParams.get("text");
@@ -23,13 +30,11 @@ function ImportForm() {
     let detectedUrl = urlParam || "";
     let detectedTitle = titleParam || "";
 
-    // Share Target Mobile : Chrome envoie souvent l'URL dans "text" ou concatène titre + URL dans "text"
     if (textParam && !detectedUrl) {
       const urlRegex = /(https?:\/\/[^\s]+)/g;
       const foundUrl = textParam.match(urlRegex);
       if (foundUrl) {
         detectedUrl = foundUrl[0];
-        // Si le texte contient autre chose que l'URL, on l'utilise comme titre potentiel
         if (!detectedTitle) {
           detectedTitle = textParam.replace(detectedUrl, "").trim();
         }
@@ -39,14 +44,12 @@ function ImportForm() {
     if (detectedUrl) setUrl(detectedUrl);
     if (detectedTitle) setTitle(detectedTitle);
     
-    // Restaurer l'EAN : priorité à l'URL, puis au localStorage (EAN courant)
     if (eanParam) {
       setEan(eanParam);
     } else {
       const storedEan = localStorage.getItem("vigi_current_ean");
       if (storedEan) {
         setEan(storedEan);
-        console.log(`[IMPORT] EAN restauré depuis le contexte : ${storedEan}`);
       }
     }
   }, [searchParams]);
@@ -57,7 +60,6 @@ function ImportForm() {
     setLoading(true);
 
     try {
-      // Déduction simple de l'enseigne depuis l'URL
       let enseigne = "Autre";
       try {
         const domain = new URL(url).hostname.replace('www.', '');
@@ -65,6 +67,7 @@ function ImportForm() {
         if (domain.includes("leroymerlin")) enseigne = "Leroy Merlin";
         if (domain.includes("bricodepot")) enseigne = "Brico Dépôt";
         if (domain.includes("manomano")) enseigne = "ManoMano";
+        if (domain.includes("castorama")) enseigne = "Castorama";
       } catch (e) {}
 
       const response = await fetch("/api/releves", {
@@ -75,7 +78,8 @@ function ImportForm() {
           enseigne,
           url,
           prix_constate: prix,
-          designation_originale: title
+          designation_originale: title,
+          match_type: matchType
         }),
       });
 
@@ -158,6 +162,42 @@ function ImportForm() {
                 className="w-full bg-black border border-neutral-800 rounded-xl px-4 py-3.5 text-lg text-white font-black focus:border-red-600 focus:ring-1 focus:ring-red-600 outline-none transition-all"
               />
             </div>
+
+            {/* Qualification Métier */}
+            <div className="pt-2">
+              <label className="text-[11px] font-bold text-neutral-500 uppercase tracking-wider mb-2.5 block px-1">Qualification du relevé</label>
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => setMatchType("exact")}
+                  className={`flex flex-col items-center gap-1.5 p-3 rounded-2xl border transition-all ${
+                    matchType === "exact" 
+                      ? "bg-emerald-600/20 border-emerald-500 text-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.15)]" 
+                      : "bg-black border-neutral-800 text-neutral-500 hover:border-neutral-700"
+                  }`}
+                >
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center ${matchType === "exact" ? "bg-emerald-500 text-white" : "bg-neutral-800 text-neutral-600"}`}>
+                    <Package className="w-4 h-4" />
+                  </div>
+                  <span className="text-[10px] font-black uppercase tracking-tighter">EAN Exact</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setMatchType("equivalent")}
+                  className={`flex flex-col items-center gap-1.5 p-3 rounded-2xl border transition-all ${
+                    matchType === "equivalent" 
+                      ? "bg-orange-600/20 border-orange-500 text-orange-400 shadow-[0_0_15px_rgba(249,115,22,0.15)]" 
+                      : "bg-black border-neutral-800 text-neutral-500 hover:border-neutral-700"
+                  }`}
+                >
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center ${matchType === "equivalent" ? "bg-orange-500 text-white" : "bg-neutral-800 text-neutral-600"}`}>
+                    <HelpCircle className="w-4 h-4" />
+                  </div>
+                  <span className="text-[10px] font-black uppercase tracking-tighter">Équivalent</span>
+                </button>
+              </div>
+            </div>
           </div>
 
           <button
@@ -183,20 +223,28 @@ function ImportForm() {
             Pour importer une page d'un seul clic, créez un favori dans votre navigateur et utilisez le code ci-dessous comme adresse (URL) :
           </p>
 
-          <div className="relative group">
-            <pre className="bg-black border border-neutral-800 rounded-xl p-4 font-mono text-[10px] text-blue-400 break-all whitespace-pre-wrap overflow-hidden">
-              {bookmarkletCode}
-            </pre>
-            <button
-              onClick={() => {
-                navigator.clipboard.writeText(bookmarkletCode);
-                alert("Code copié !");
-              }}
-              className="absolute top-2 right-2 p-2 bg-neutral-800 hover:bg-neutral-700 rounded-lg text-white transition-all shadow-lg"
-              title="Copier le code"
-            >
-              <Save className="w-3 h-3" />
-            </button>
+          <div className="relative group min-h-[80px]">
+            {isMounted ? (
+              <>
+                <pre className="bg-black border border-neutral-800 rounded-xl p-4 font-mono text-[10px] text-blue-400 break-all whitespace-pre-wrap overflow-hidden">
+                  {bookmarkletCode}
+                </pre>
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(bookmarkletCode);
+                    alert("Code copié !");
+                  }}
+                  className="absolute top-2 right-2 p-2 bg-neutral-800 hover:bg-neutral-700 rounded-lg text-white transition-all shadow-lg"
+                  title="Copier le code"
+                >
+                  <Save className="w-3 h-3" />
+                </button>
+              </>
+            ) : (
+              <div className="bg-black border border-neutral-800 rounded-xl p-4 flex items-center justify-center">
+                <div className="w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
+              </div>
+            )}
           </div>
 
           <div className="space-y-3 p-4 bg-emerald-950/10 border border-emerald-900/20 rounded-xl">

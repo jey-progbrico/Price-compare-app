@@ -25,6 +25,8 @@ import {
 export const dynamic = "force-dynamic";
 export const fetchCache = "force-no-store";
 
+import GlobalSearchBar from "@/components/GlobalSearchBar";
+
 export default async function Home() {
   const [
     { count: totalProduits },
@@ -92,6 +94,11 @@ export default async function Home() {
           <StatCard title="Relevés Prix" value={totalReleves || 0} icon={<BarChart3 className="w-5 h-5" />} trend="Activité forte" />
           <StatCard title="Rayons" value={totalRayons} icon={<Layers className="w-5 h-5" />} color="red" />
           <StatCard title="Enseignes" value={totalConcurrents} icon={<TrendingUp className="w-5 h-5" />} />
+        </div>
+
+        {/* Barre de Recherche Globale */}
+        <div className="max-w-4xl">
+          <GlobalSearchBar placeholder="Chercher un produit, une marque ou un EAN..." />
         </div>
 
         <div className="grid grid-cols-3 gap-10">
@@ -172,6 +179,12 @@ export default async function Home() {
               </div>
             </Link>
           )}
+
+          {/* RECHERCHE GLOBALE */}
+          <section className="space-y-4">
+            <h2 className="text-[10px] font-black text-neutral-600 uppercase tracking-[0.3em] px-1">Recherche Rapide</h2>
+            <GlobalSearchBar />
+          </section>
 
           {/* ACTIONS RAPIDES - GRILLE TACTILE */}
           <section className="space-y-4">

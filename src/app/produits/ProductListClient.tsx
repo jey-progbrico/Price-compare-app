@@ -8,10 +8,12 @@ import { Product } from "@/types/database";
 
 export default function ProductListClient({ 
   initialProducts, 
-  isHierarchicalView = true 
+  isHierarchicalView = true,
+  hideSearch = false
 }: { 
   initialProducts: Product[],
-  isHierarchicalView?: boolean 
+  isHierarchicalView?: boolean,
+  hideSearch?: boolean
 }) {
   const [query, setQuery] = useState("");
   const [openCategory, setOpenCategory] = useState<string | null>(null);
@@ -85,26 +87,28 @@ export default function ProductListClient({
   return (
     <div className="space-y-6">
       {/* Search Bar */}
-      <form onSubmit={handleSearchExactEAN} className="relative w-full">
-        <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-          <Search className="h-5 w-5 text-neutral-500" />
-        </div>
-        <input
-          type="text"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Rechercher un produit ou EAN..."
-          className="block w-full pl-12 pr-12 py-4 bg-neutral-900 border border-neutral-800 rounded-2xl text-white placeholder-neutral-600 focus:ring-2 focus:ring-red-600 focus:border-transparent transition-all outline-none shadow-xl"
-        />
-        {query.trim().match(/^\d{8,13}$/) && (
-          <button 
-            type="submit"
-            className="absolute inset-y-0 right-2 my-2 px-3 bg-red-600 hover:bg-red-500 text-white rounded-xl flex items-center justify-center transition-colors shadow-lg"
-          >
-            <ScanBarcode className="w-5 h-5" />
-          </button>
-        )}
-      </form>
+      {!hideSearch && (
+        <form onSubmit={handleSearchExactEAN} className="relative w-full">
+          <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+            <Search className="h-5 w-5 text-neutral-500" />
+          </div>
+          <input
+            type="text"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Rechercher un produit ou EAN..."
+            className="block w-full pl-12 pr-12 py-4 bg-neutral-900 border border-neutral-800 rounded-2xl text-white placeholder-neutral-600 focus:ring-2 focus:ring-red-600 focus:border-transparent transition-all outline-none shadow-xl"
+          />
+          {query.trim().match(/^\d{8,13}$/) && (
+            <button 
+              type="submit"
+              className="absolute inset-y-0 right-2 my-2 px-3 bg-red-600 hover:bg-red-500 text-white rounded-xl flex items-center justify-center transition-colors shadow-lg"
+            >
+              <ScanBarcode className="w-5 h-5" />
+            </button>
+          )}
+        </form>
+      )}
 
       {/* Results Meta */}
       <div className="px-1 flex justify-between items-center">

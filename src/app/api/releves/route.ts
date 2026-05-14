@@ -41,7 +41,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { ean, enseigne, url, prix_constate, designation_originale, designation_normalisee } = body;
+    const { ean, enseigne, url, prix_constate, designation_originale, designation_normalisee, match_type } = body;
 
     if (!ean || !enseigne || !url || prix_constate === undefined) {
       return NextResponse.json({ error: "Données manquantes" }, { status: 400 });
@@ -57,6 +57,7 @@ export async function POST(request: NextRequest) {
           prix_constate: parseFloat(prix_constate),
           designation_originale,
           designation_normalisee,
+          match_type,
         },
       ])
       .select();

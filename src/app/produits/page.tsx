@@ -5,13 +5,17 @@ import { supabase } from "@/lib/supabase";
 import { Package, ArrowRight, Plus } from "lucide-react";
 import Link from "next/link";
 import CreateProductModal from "@/components/CreateProductModal";
+import GlobalSearchBar from "@/components/GlobalSearchBar";
+import ProductListClient from "./ProductListClient";
 import { useSearchParams } from "next/navigation";
-import { RayonRow } from "@/types/database";
+import { RayonRow, Product } from "@/types/database";
 
 function ProduitsPageContent() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const searchParams = useSearchParams();
+  const query = searchParams.get("q") || "";
   const [rayons, setRayons] = useState<{name: string, slug: string}[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -20,29 +24,43 @@ function ProduitsPageContent() {
     }
   }, [searchParams]);
 
-  // Fetch unique rayons on client side since we need state for the modal
+  // Fetch data
   useEffect(() => {
-    const fetchRayons = async () => {
-      const { data } = await supabase
-        .from("produits")
-        .select("rayon")
-        .not("rayon", "is", null)
-        .order("rayon", { ascending: true });
+    const fetchData = async () => {
+      setLoading(true);
       
-      if (data) {
-        const rows = data as RayonRow[];
-        const unique = Array.from(new Set(rows.map(r => r.rayon)))
-          .filter((name): name is string => !!name)
-          .map(name => ({
-            name: name,
-            slug: encodeURIComponent(name.toLowerCase().replace(/\s+/g, '-'))
-          }));
-        setRayons(unique);
+      if (query) {
+        // Recherche globale
+        const { data, error } = await supabase
+          .from("produits")
+          .select("*")
+          .or(`description_produit.ilike.%${query}%,numero_ean.ilike.%${query}%,marque.ilike.%${query}%,groupe_produit.ilike.%${query}%,rayon.ilike.%${query}%`)
+          .limit(100);
+        
+        if (data) setProducts(data as Product[]);
+      } else {
+        // Liste des rayons
+        const { data } = await supabase
+          .from("produits")
+          .select("rayon")
+          .not("rayon", "is", null)
+          .order("rayon", { ascending: true });
+        
+        if (data) {
+          const rows = data as RayonRow[];
+          const unique = Array.from(new Set(rows.map(r => r.rayon)))
+            .filter((name): name is string => !!name)
+            .map(name => ({
+              name: name,
+              slug: encodeURIComponent(name.toLowerCase().replace(/\s+/g, '-'))
+            }));
+          setRayons(unique);
+        }
       }
       setLoading(false);
     };
-    fetchRayons();
-  }, []);
+    fetchData();
+  }, [query]);
 
   return (
     <main className="min-h-full bg-[#0a0a0c] p-4 sm:p-6 lg:p-12 pt-12 pb-24 space-y-10 animate-in fade-in">
@@ -61,35 +79,60 @@ function ProduitsPageContent() {
         </button>
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4 lg:gap-3">
-        {rayons.map((rayon) => (
-          <Link 
-            key={rayon.name}
-            href={`/rayon/${rayon.slug}`}
-            className="group relative aspect-square lg:aspect-auto lg:h-32 bg-neutral-900 border border-neutral-800 rounded-3xl lg:rounded-2xl p-6 lg:p-4 flex flex-col justify-end overflow-hidden hover:border-red-600/50 transition-all active:scale-[0.98] shadow-xl"
-          >
-            <div className="absolute top-0 right-0 p-4 lg:p-3 opacity-5 group-hover:opacity-10 transition-opacity">
-              <Package className="w-16 h-16 lg:w-10 lg:h-10 text-white" />
-            </div>
-            
-            <div className="relative z-10">
-              <div className="w-8 h-1 lg:h-0.5 rounded-full bg-red-600 mb-3 lg:mb-2 group-hover:w-12 transition-all" />
-              <h2 className="text-base lg:text-xs font-black text-white leading-tight uppercase tracking-tight line-clamp-2">
-                {rayon.name}
-              </h2>
-              <div className="flex items-center gap-1 mt-2 lg:mt-1 text-[9px] lg:text-[7px] font-bold text-neutral-500 group-hover:text-red-500 transition-colors uppercase tracking-widest">
-                Explorer <ArrowRight className="w-3 h-3 lg:w-2 lg:h-2" />
-              </div>
-            </div>
-          </Link>
-        ))}
-      </div>
+      <GlobalSearchBar initialValue={query} />
 
-      {rayons.length === 0 && !loading && (
-        <div className="text-center py-20 text-neutral-600">
-          <Package className="w-12 h-12 mx-auto mb-4 opacity-10" />
-          <p className="text-sm font-bold uppercase tracking-widest opacity-30">Aucun rayon trouvé</p>
+      {loading ? (
+        <div className="text-center py-20">
+          <div className="w-10 h-10 border-4 border-red-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-xs font-black text-neutral-500 uppercase tracking-widest">Recherche en cours...</p>
         </div>
+      ) : query ? (
+        <div className="space-y-6">
+          <div className="flex justify-between items-end px-1">
+            <h2 className="text-[10px] font-black text-neutral-500 uppercase tracking-widest">Résultats de recherche</h2>
+            <Link href="/produits" className="text-[10px] font-black text-red-500 uppercase tracking-widest">Voir tous les rayons</Link>
+          </div>
+          <ProductListClient initialProducts={products} hideSearch={true} isHierarchicalView={false} />
+          {products.length === 0 && (
+            <div className="text-center py-20 text-neutral-600">
+              <Package className="w-12 h-12 mx-auto mb-4 opacity-10" />
+              <p className="text-sm font-bold uppercase tracking-widest opacity-30">Aucun produit ne correspond à "{query}"</p>
+            </div>
+          )}
+        </div>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4 lg:gap-3">
+            {rayons.map((rayon) => (
+              <Link 
+                key={rayon.name}
+                href={`/rayon/${rayon.slug}`}
+                className="group relative aspect-square lg:aspect-auto lg:h-32 bg-neutral-900 border border-neutral-800 rounded-3xl lg:rounded-2xl p-6 lg:p-4 flex flex-col justify-end overflow-hidden hover:border-red-600/50 transition-all active:scale-[0.98] shadow-xl"
+              >
+                <div className="absolute top-0 right-0 p-4 lg:p-3 opacity-5 group-hover:opacity-10 transition-opacity">
+                  <Package className="w-16 h-16 lg:w-10 lg:h-10 text-white" />
+                </div>
+                
+                <div className="relative z-10">
+                  <div className="w-8 h-1 lg:h-0.5 rounded-full bg-red-600 mb-3 lg:mb-2 group-hover:w-12 transition-all" />
+                  <h2 className="text-base lg:text-xs font-black text-white leading-tight uppercase tracking-tight line-clamp-2">
+                    {rayon.name}
+                  </h2>
+                  <div className="flex items-center gap-1 mt-2 lg:mt-1 text-[9px] lg:text-[7px] font-bold text-neutral-500 group-hover:text-red-500 transition-colors uppercase tracking-widest">
+                    Explorer <ArrowRight className="w-3 h-3 lg:w-2 lg:h-2" />
+                  </div>
+                </div>
+              </Link>
+            ))}
+          </div>
+
+          {rayons.length === 0 && (
+            <div className="text-center py-20 text-neutral-600">
+              <Package className="w-12 h-12 mx-auto mb-4 opacity-10" />
+              <p className="text-sm font-bold uppercase tracking-widest opacity-30">Aucun rayon trouvé</p>
+            </div>
+          )}
+        </>
       )}
 
       <CreateProductModal 

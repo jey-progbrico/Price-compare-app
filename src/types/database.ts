@@ -56,6 +56,7 @@ export interface PriceLog {
   enseigne: string;
   url: string | null;
   designation_originale: string | null;
+  match_type?: "exact" | "equivalent" | null;
   created_at: string;
 }
 

@@ -77,7 +77,7 @@ export default async function GroupeProduitsPage({ params }: { params: Promise<{
       {/* Liste des produits (Réutilisation du client component pour les vignettes) */}
       <div className="space-y-4">
         {produits && produits.length > 0 ? (
-          <ProductListClient initialProducts={produits} isHierarchicalView={false} />
+          <ProductListClient initialProducts={produits} isHierarchicalView={false} hideSearch={true} />
         ) : (
           <div className="text-center py-20 text-neutral-600">
             <Package className="w-12 h-12 mx-auto mb-4 opacity-10" />

@@ -37,7 +37,8 @@ interface SearchResult {
   isStale?: boolean;
   prix_precedent?: number | null;
   date_changement_prix?: string | null;
-  relevance_score?: number | null;
+  match_type?: "exact" | "equivalent" | null;
+  created_at?: string;
 }
 
 type SourceStatus = "pending" | "running" | "success" | "not_found" | "blocked" | "error" | "skipped";
@@ -172,26 +173,22 @@ function ManualVeilleCard({ res, index, ean, internalPrice, releveId, onDelete }
 }) {
   // Initialiser avec le prix existant si présent (conversion string pour l'input)
   const [prix, setPrix] = useState<string>(res.prix != null ? res.prix.toString() : "");
+  const [matchType, setMatchType] = useState<"exact" | "equivalent">(res.match_type || "exact");
   const [loading, setLoading] = useState(false);
   const [saved, setSaved] = useState(false);
   const color = getEnseigneColor(res.enseigne);
 
-  // Log d'affichage initial
-  if (res.prix) {
-    console.log(`[RELEVE DISPLAY DATA] ${res.enseigne}: ${res.prix}€`);
-  }
-
   const handleSave = async () => {
     if (!prix || isNaN(parseFloat(prix))) return;
+    setLoading(true);
     const payload = {
       ean,
       enseigne: res.enseigne,
       url: res.lien,
       prix_constate: prix,
-      designation_originale: res.titre
+      designation_originale: res.titre,
+      match_type: matchType
     };
-
-    console.log("[RELEVE SAVE PAYLOAD] Sending:", payload);
 
     try {
       const response = await fetch("/api/releves", {
@@ -201,9 +198,9 @@ function ManualVeilleCard({ res, index, ean, internalPrice, releveId, onDelete }
       });
 
       if (response.ok) {
-        console.log(`[RELEVE SAVED] Succès pour ${res.enseigne} (${prix}€)`);
+        setSaved(true);
+        setTimeout(() => setSaved(false), 3000);
         
-        // Journaliser l'activité
         await fetch("/api/activites", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -213,13 +210,10 @@ function ManualVeilleCard({ res, index, ean, internalPrice, releveId, onDelete }
             details: {
               enseigne: res.enseigne,
               prix: parseFloat(prix),
-              designation: res.titre
+              match_type: matchType
             }
           }),
         }).catch(err => console.error("Erreur log activite:", err));
-
-        setSaved(true);
-        setTimeout(() => setSaved(false), 3000);
       }
     } catch (err) {
       console.error("Erreur sauvegarde relevé:", err);
@@ -307,6 +301,31 @@ function ManualVeilleCard({ res, index, ean, internalPrice, releveId, onDelete }
         </div>
       </div>
 
+      {/* Badges et Horodatage */}
+      <div className="flex flex-wrap items-center gap-2">
+        {res.match_type && (
+          <div className={`flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-tighter border ${
+            res.match_type === "exact" 
+              ? "bg-emerald-950/40 border-emerald-500/30 text-emerald-500" 
+              : "bg-orange-950/40 border-orange-500/30 text-orange-500"
+          }`}>
+            {res.match_type === "exact" ? (
+              <CheckCircle2 className="w-2.5 h-2.5" />
+            ) : (
+              <Zap className="w-2.5 h-2.5" />
+            )}
+            {res.match_type === "exact" ? "EAN Exact" : "Equivalent"}
+          </div>
+        )}
+
+        {res.created_at && (
+          <div className="flex items-center gap-1 text-[9px] font-black text-neutral-600 uppercase tracking-widest bg-black/40 px-2 py-0.5 rounded-md border border-neutral-900">
+            <Clock className="w-2.5 h-2.5" />
+            {new Date(res.created_at).toLocaleDateString('fr-FR')} {new Date(res.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+          </div>
+        )}
+      </div>
+
       {/* Zone d'action : Saisie du prix */}
       <div className="flex items-center gap-2">
         <div className="relative flex-1">
@@ -324,6 +343,27 @@ function ManualVeilleCard({ res, index, ean, internalPrice, releveId, onDelete }
             €
           </div>
         </div>
+
+        {!releveId && (
+          <div className="flex bg-black border border-neutral-800 rounded-xl p-1">
+            <button
+              onClick={() => setMatchType("exact")}
+              className={`px-3 py-2 rounded-lg text-[9px] font-black uppercase transition-all ${
+                matchType === "exact" ? "bg-emerald-600 text-white shadow-lg" : "text-neutral-600 hover:text-neutral-400"
+              }`}
+            >
+              Exact
+            </button>
+            <button
+              onClick={() => setMatchType("equivalent")}
+              className={`px-3 py-2 rounded-lg text-[9px] font-black uppercase transition-all ${
+                matchType === "equivalent" ? "bg-orange-600 text-white shadow-lg" : "text-neutral-600 hover:text-neutral-400"
+              }`}
+            >
+              Equiv.
+            </button>
+          </div>
+        )}
         
         <button
           onClick={handleSave}
@@ -472,7 +512,9 @@ export default function CompareButton({
                   titre: rel.designation_originale || "Produit sans nom",
                   lien: rel.url || "",
                   prix: rel.prix_constate,
-                  source: "releve_manuel"
+                  source: "releve_manuel",
+                  match_type: rel.match_type,
+                  created_at: rel.created_at
                 }}
                 index={i}
                 ean={ean}
