@@ -24,6 +24,7 @@ export default async function Home() {
   interface ConcurrentRow { enseigne: string; }
   interface RecentProduct { ean: string; titre: string; prix: number; enseigne: string; updated_at: string; }
   interface SupportSummary { unread_count_admin: number; unread_count_user: number; }
+  interface ActivityRow { type_action: string; ean?: string; details?: any; created_at: string; }
 
   const [
     { count: totalProduits },
@@ -41,6 +42,7 @@ export default async function Home() {
 
   const totalRayons = new Set((rawRayons as RayonRow[] | null)?.map(r => r.rayon) || []).size;
   const totalConcurrents = new Set((rawConcurrents as ConcurrentRow[] | null)?.map(c => c.enseigne) || []).size;
+  const typedActivities = (activities as ActivityRow[] | null) || [];
 
   // 2. Historique pour le mobile (reprise rapide)
   const { data: recents } = await supabase
@@ -103,7 +105,7 @@ export default async function Home() {
             </div>
             
             <div className="bg-neutral-900/30 border border-neutral-800 rounded-[2.5rem] p-8 space-y-6">
-              {activities?.map((act, i) => (
+              {typedActivities.map((act, i) => (
                 <div key={i} className="flex items-start gap-5 group">
                   <div className="w-10 h-10 rounded-2xl bg-black border border-neutral-800 flex items-center justify-center shrink-0 group-hover:border-red-600/50 transition-all">
                     {act.type_action === 'import_produit' ? <Plus className="w-4 h-4 text-red-500" /> : <Tag className="w-4 h-4 text-neutral-600" />}
@@ -238,7 +240,7 @@ export default async function Home() {
           <section className="space-y-4">
             <h2 className="text-[10px] font-black text-neutral-600 uppercase tracking-[0.3em] px-1">Activité Terrain</h2>
             <div className="bg-neutral-900/30 border border-neutral-800 rounded-[2.5rem] p-6 space-y-6">
-              {activities?.slice(0, 4).map((act, i) => (
+              {typedActivities.slice(0, 4).map((act, i) => (
                 <div key={i} className="flex items-center gap-4">
                   <div className="w-8 h-8 rounded-xl bg-black border border-neutral-800 flex items-center justify-center shrink-0">
                     {act.type_action === 'import_produit' ? <Plus className="w-3 h-3 text-red-500" /> : <Tag className="w-3 h-3 text-neutral-600" />}
@@ -266,7 +268,16 @@ export default async function Home() {
 // COMPONENTS
 // ---------------------------------------------------------
 
-function MobileActionBtn({ href, icon, label, sub, color = "bg-neutral-900/50", main = false }: any) {
+interface MobileActionBtnProps {
+  href: string;
+  icon: React.ReactNode;
+  label: string;
+  sub: string;
+  color?: string;
+  main?: boolean;
+}
+
+function MobileActionBtn({ href, icon, label, sub, color = "bg-neutral-900/50", main = false }: MobileActionBtnProps) {
   return (
     <Link href={href} className={`${color} border border-white/5 rounded-[2.2rem] p-6 flex flex-col gap-3 group active:scale-95 transition-all shadow-xl`}>
       <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${main ? "bg-white/20" : "bg-black/40 border border-white/5"}`}>
@@ -280,15 +291,23 @@ function MobileActionBtn({ href, icon, label, sub, color = "bg-neutral-900/50", 
   );
 }
 
-function ChevronRight(props: any) {
+function ChevronRight({ className }: { className?: string }) {
   return (
-    <svg fill="none" stroke="currentColor" strokeWidth="3" viewBox="0 0 24 24" className={props.className}>
+    <svg fill="none" stroke="currentColor" strokeWidth="3" viewBox="0 0 24 24" className={className}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
     </svg>
   );
 }
 
-function StatCard({ title, value, icon, trend, color = "white" }: any) {
+interface StatCardProps {
+  title: string;
+  value: string | number;
+  icon: React.ReactNode;
+  trend?: string;
+  color?: string;
+}
+
+function StatCard({ title, value, icon, trend }: StatCardProps) {
   return (
     <div className="bg-neutral-900/30 border border-neutral-800 rounded-3xl p-6 hover:border-neutral-700 transition-all group">
       <div className="flex justify-between items-start mb-4">
@@ -305,7 +324,14 @@ function StatCard({ title, value, icon, trend, color = "white" }: any) {
   );
 }
 
-function ActionLink({ href, icon, label, sub }: any) {
+interface ActionLinkProps {
+  href: string;
+  icon: React.ReactNode;
+  label: string;
+  sub: string;
+}
+
+function ActionLink({ href, icon, label, sub }: ActionLinkProps) {
   return (
     <Link href={href} className="flex items-center gap-5 p-5 bg-neutral-900/30 border border-neutral-800 rounded-2xl hover:border-red-600/50 hover:bg-neutral-900/50 transition-all group shadow-xl">
       <div className="w-12 h-12 bg-black rounded-xl border border-neutral-800 flex items-center justify-center text-neutral-600 group-hover:text-red-500 transition-colors shrink-0">
