@@ -18,7 +18,7 @@ export default function ExportModal({ isOpen, onClose, rayons }: ExportModalProp
     rayon: ""
   });
 
-  if (!isOpen) return null;
+
 
   const handleDownload = async () => {
     setLoading(true);
@@ -64,6 +64,8 @@ export default function ExportModal({ isOpen, onClose, rayons }: ExportModalProp
       setLoading(false);
     }
   };
+
+  if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-300">
