@@ -71,3 +71,9 @@ export interface GroupeRow {
 export interface ConcurrentRow { 
   enseigne: string; 
 }
+
+export interface ConsultationRow {
+  id: string;
+  ean: string;
+  created_at: string;
+}

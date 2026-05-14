@@ -5,14 +5,14 @@ import { supabase } from "./supabase";
  * Enrichit une liste d'objets (relevés, activités, etc.) avec les données des produits correspondants.
  * Utilisé car il n'y a pas de relations SQL explicites (Foreign Keys) dans la base.
  * 
- * @param items Liste d'objets contenant une propriété 'ean'
+ * @param items Liste d'objets contenant potentiellement une propriété 'ean'
  * @returns La liste enrichie avec une propriété 'produit'
  */
-export async function enrichWithProducts<T extends { ean: string }>(items: T[]): Promise<(T & { produit: Product | null })[]> {
+export async function enrichWithProducts<T extends { ean?: string | null }>(items: T[]): Promise<(T & { produit: Product | null })[]> {
   if (!items || items.length === 0) return [];
 
-  // 1. Extraire les EAN uniques
-  const eans = Array.from(new Set(items.map(item => item.ean).filter(Boolean)));
+  // 1. Extraire les EAN uniques (seulement ceux présents)
+  const eans = Array.from(new Set(items.map(item => item.ean).filter((ean): ean is string => !!ean)));
   
   if (eans.length === 0) return items.map(item => ({ ...item, produit: null }));
 
@@ -33,6 +33,6 @@ export async function enrichWithProducts<T extends { ean: string }>(items: T[]):
   // 4. Fusionner les données
   return items.map(item => ({
     ...item,
-    produit: produitMap.get(item.ean) || null
+    produit: item.ean ? (produitMap.get(item.ean) || null) : null
   }));
 }

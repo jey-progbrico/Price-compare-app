@@ -5,6 +5,7 @@ import Link from "next/link";
 export const dynamic = "force-dynamic";
 
 import { enrichWithProducts } from "@/lib/data-utils";
+import { PriceLog, ConsultationRow } from "@/types/database";
 
 interface HistoriqueActivity {
   id: string;
@@ -34,8 +35,8 @@ async function getActivites() {
 
   // 3. Enrichir les deux listes avec les détails produits via le helper
   const [releves, consultations] = await Promise.all([
-    enrichWithProducts((rawReleves as any[]) || []),
-    enrichWithProducts((rawConsultations as any[]) || [])
+    enrichWithProducts((rawReleves as PriceLog[]) || []),
+    enrichWithProducts((rawConsultations as ConsultationRow[]) || [])
   ]);
 
   // 4. Fusionner et typer pour l'affichage
