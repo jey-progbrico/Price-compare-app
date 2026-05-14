@@ -469,7 +469,7 @@ export default function CompareButton({
                 key={rel.id}
                 res={{
                   enseigne: rel.enseigne,
-                  titre: rel.designation_originale,
+                  titre: rel.designation_originale || "Produit sans nom",
                   lien: rel.url,
                   prix: rel.prix_constate,
                   source: "releve_manuel"
