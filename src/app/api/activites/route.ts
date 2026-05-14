@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 import { enrichWithProducts } from "@/lib/data-utils";
+import { Activity } from "@/types/database";
 
 /**
  * GET /api/activites
@@ -20,7 +21,7 @@ export async function GET(request: Request) {
     if (error) throw error;
 
     // Jointure manuelle via le helper
-    const activities = await enrichWithProducts(rawActivities || []);
+    const activities = await enrichWithProducts((rawActivities as Activity[]) || []);
 
     return NextResponse.json(activities);
   } catch (err: any) {

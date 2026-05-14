@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 
+import { PriceLog } from "@/types/database";
+
 export const dynamic = "force-dynamic";
 
 /**
@@ -26,7 +28,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    return NextResponse.json({ results: data });
+    return NextResponse.json({ results: data as PriceLog[] });
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });
   }

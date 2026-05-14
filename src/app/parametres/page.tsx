@@ -29,6 +29,8 @@ import { useRouter } from "next/navigation";
 import { showToast } from "@/components/Toast";
 import { useProfile } from "@/hooks/useProfile";
 
+import { RayonRow } from "@/types/database";
+
 export default function ParametresPage() {
   const router = useRouter();
   const supabase = createClient();
@@ -57,8 +59,8 @@ export default function ParametresPage() {
       setRelevesCount(count || 0);
 
       const { data: rayonsData } = await supabase.from("produits").select("rayon").not("rayon", "is", null);
-      const uniqueRayons = Array.from(new Set(rayonsData?.map(r => r.rayon) || []));
-      setRayons(uniqueRayons as string[]);
+      const uniqueRayons = Array.from(new Set((rayonsData as RayonRow[] | null)?.map(r => r.rayon).filter((r): r is string => !!r) || []));
+      setRayons(uniqueRayons);
     };
 
     const fetchSettings = async () => {

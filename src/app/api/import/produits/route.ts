@@ -2,6 +2,17 @@ import { NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 import * as XLSX from "xlsx";
 
+import { Product } from "@/types/database";
+
+interface RawRow {
+  description_produit?: string;
+  numero_ean?: string | number;
+  groupe_produit?: string;
+  marque?: string;
+  prix_vente?: string | number;
+  rayon?: string;
+}
+
 export async function POST(request: Request) {
   try {
     const formData = await request.formData();
@@ -19,14 +30,14 @@ export async function POST(request: Request) {
     const buffer = await file.arrayBuffer();
     const wb = XLSX.read(buffer, { type: "array" });
     const ws = wb.Sheets[wb.SheetNames[0]];
-    const rawData = XLSX.utils.sheet_to_json(ws);
+    const rawData = XLSX.utils.sheet_to_json(ws) as RawRow[];
 
     if (rawData.length === 0) {
       return NextResponse.json({ error: "Le fichier est vide." }, { status: 400 });
     }
 
     // 2. Validation des colonnes (Basée sur le nom de colonne)
-    const requiredCols = [
+    const requiredCols: (keyof RawRow)[] = [
       "description_produit",
       "numero_ean",
       "groupe_produit",
@@ -35,7 +46,7 @@ export async function POST(request: Request) {
       "rayon"
     ];
 
-    const firstRowKeys = Object.keys(rawData[0] as any);
+    const firstRowKeys = Object.keys(rawData[0]) as (keyof RawRow)[];
     const missingCols = requiredCols.filter(col => !firstRowKeys.includes(col));
 
     if (missingCols.length > 0) {
@@ -45,10 +56,10 @@ export async function POST(request: Request) {
     }
 
     // 3. Validation des données ligne par ligne
-    const cleanData: any[] = [];
+    const cleanData: Partial<Product>[] = [];
     const errors: string[] = [];
 
-    rawData.forEach((row: any, index) => {
+    rawData.forEach((row, index) => {
       const lineNum = index + 2; // +1 header +1 index
       
       // Nettoyage EAN (string)

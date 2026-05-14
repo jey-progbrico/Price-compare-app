@@ -20,6 +20,7 @@ import { useProfile } from "@/hooks/useProfile";
 import { format, formatDistanceToNow } from "date-fns";
 import { fr } from "date-fns/locale";
 import { SupportConversation, SupportMessage } from "@/types/support";
+import { Profile } from "@/types/database";
 
 export default function AdminSupportPage() {
   const { profile, isAdmin, loading: profileLoading } = useProfile();
@@ -62,9 +63,9 @@ export default function AdminSupportPage() {
             .in("id", userIds);
           
           if (!pError && profiles) {
-            const emailMap = (profiles as any[]).reduce((acc: any, p: any) => ({
+            const emailMap = (profiles as Profile[]).reduce<Record<string, string>>((acc, p) => ({
               ...acc,
-              [p.id]: p.email
+              [p.id]: p.email || "Utilisateur inconnu"
             }), {});
             setUserEmails(emailMap);
           }
