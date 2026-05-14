@@ -25,12 +25,12 @@ export default async function ProductPage({
     .single();
 
   // Log de la consultation (Async/Non-bloquant)
-  supabase
-    .from("historique_consultations")
-    .insert([{ ean, created_at: new Date().toISOString() }])
-    .then(({ error }) => {
-      if (error) console.error("[LOG ERROR] Erreur tracking consultation:", error);
-    });
+  (async () => {
+    const { error: logError } = await supabase
+      .from("historique_consultations")
+      .insert([{ ean, created_at: new Date().toISOString() }]);
+    if (logError) console.error("[LOG ERROR] Erreur tracking consultation:", logError);
+  })();
 
   if (error && error.code !== "PGRST116") {
     console.error(error);
