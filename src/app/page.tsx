@@ -13,7 +13,9 @@ import {
   Plus, 
   Upload,
   TrendingUp,
-  FileSpreadsheet
+  FileSpreadsheet,
+  Info,
+  Zap
 } from "lucide-react";
 import { 
   RayonRow, 
@@ -87,10 +89,24 @@ export default async function Home() {
           VIEW DESKTOP (lg+) - INCHANGÉE
       --------------------------------------------------------- */}
       <div className="hidden lg:flex flex-col p-12 space-y-12 animate-in fade-in duration-700">
-        <header>
-          <h1 className="text-4xl font-black text-white tracking-tighter uppercase">Tableau de bord</h1>
-          <p className="text-neutral-500 font-medium uppercase tracking-[0.2em] text-xs mt-2">Pilotage & Intelligence Tarifaire ({profile?.role || 'utilisateur'})</p>
-        </header>
+          <div className="flex justify-between items-end">
+            <div>
+              <h1 className="text-4xl font-black text-white tracking-tighter uppercase">Tableau de bord</h1>
+              <p className="text-neutral-500 font-medium uppercase tracking-[0.2em] text-xs mt-2">Pilotage & Intelligence Tarifaire ({profile?.role || 'utilisateur'})</p>
+            </div>
+            <Link 
+              href="/parametres#updates" 
+              className="px-5 py-3 bg-emerald-500/5 border border-emerald-500/10 rounded-2xl flex items-center gap-3 group hover:bg-emerald-500/10 transition-all"
+            >
+              <div className="w-8 h-8 rounded-xl bg-emerald-500/10 flex items-center justify-center text-emerald-500 group-hover:scale-110 transition-transform">
+                <Zap className="w-4 h-4" />
+              </div>
+              <div className="text-left">
+                <p className="text-[10px] font-black text-emerald-500 uppercase tracking-widest leading-tight">Mise à jour</p>
+                <p className="text-[9px] font-bold text-neutral-600 uppercase tracking-tighter">Découvrir v7.22</p>
+              </div>
+            </Link>
+          </div>
 
         {/* Grille KPI */}
         <div className="grid grid-cols-4 gap-6">
@@ -192,7 +208,13 @@ export default async function Home() {
 
           {/* ACTIONS RAPIDES - GRILLE TACTILE */}
           <section className="space-y-4">
-            <h2 className="text-[10px] font-black text-neutral-600 uppercase tracking-[0.3em] px-1">Centre d'action</h2>
+            <div className="flex justify-between items-end px-1">
+              <h2 className="text-[10px] font-black text-neutral-600 uppercase tracking-[0.3em]">Centre d'action</h2>
+              <Link href="/parametres#updates" className="flex items-center gap-2 px-3 py-1.5 bg-emerald-500/10 border border-emerald-500/20 rounded-full active:scale-95 transition-all">
+                <Zap className="w-3 h-3 text-emerald-500" />
+                <span className="text-[9px] font-black text-emerald-500 uppercase tracking-widest">Nouveautés</span>
+              </Link>
+            </div>
             <div className="grid grid-cols-2 gap-4">
               <MobileActionBtn 
                 href="/produits" 
@@ -223,35 +245,6 @@ export default async function Home() {
             </div>
           </section>
 
-          {/* REPRENDRE RAPIDEMENT */}
-          <section className="space-y-4">
-            <div className="flex justify-between items-end px-1">
-              <h2 className="text-[10px] font-black text-neutral-600 uppercase tracking-[0.3em]">Reprendre</h2>
-              <Link href="/historique" className="text-[10px] font-black text-red-500 uppercase tracking-widest">Voir tout</Link>
-            </div>
-            
-            <div className="flex overflow-x-auto gap-4 scrollbar-hide pb-2 -mx-6 px-6">
-              {uniqueRecents.map((item, i) => (
-                <Link key={i} href={`/produit/${item.ean}`} className="w-64 bg-neutral-900/50 border border-neutral-800 rounded-3xl p-5 shrink-0 flex flex-col gap-3 group active:scale-95 transition-all">
-                  <div className="flex justify-between items-start">
-                    <div className="w-10 h-10 rounded-2xl bg-black border border-neutral-800 flex items-center justify-center">
-                      <Package className="w-5 h-5 text-neutral-600" />
-                    </div>
-                    <span className="text-white font-black text-lg">{item.prix}€</span>
-                  </div>
-                  <div>
-                    <h4 className="text-sm font-black text-white uppercase tracking-tight truncate">{item.titre}</h4>
-                    <p className="text-[9px] font-black text-neutral-600 uppercase tracking-widest truncate mt-1">{item.enseigne}</p>
-                  </div>
-                </Link>
-              ))}
-              {uniqueRecents.length === 0 && (
-                <div className="w-full py-12 text-center border-2 border-dashed border-neutral-900 rounded-[2.5rem]">
-                  <p className="text-[10px] font-black text-neutral-700 uppercase tracking-widest">Aucun produit récent</p>
-                </div>
-              )}
-            </div>
-          </section>
 
           {/* ACTIVITÉ TERRAIN */}
           <section className="space-y-4">

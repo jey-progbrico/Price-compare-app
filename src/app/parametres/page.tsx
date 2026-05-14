@@ -21,7 +21,8 @@ import {
   EyeOff,
   LogOut,
   Loader2,
-  AlertCircle
+  AlertCircle,
+  Info
 } from "lucide-react";
 import ExportModal from "./ExportModal";
 import { createClient } from "@/lib/supabase/client";
@@ -557,6 +558,101 @@ export default function ParametresPage() {
                 </div>
               </form>
             )}
+          </div>
+        </div>
+      </section>
+
+      {/* 6. NOTES DE MISE À JOUR */}
+      <section id="updates" className="space-y-4 pt-12">
+        <div className="flex items-center gap-2 px-1">
+          <Info className="w-4 h-4 text-neutral-600" />
+          <h2 className="text-xs font-black text-neutral-400 uppercase tracking-widest">Dernières mises à jour</h2>
+        </div>
+        
+        <div className="bg-neutral-900/40 border border-neutral-800/60 rounded-[2rem] p-6 space-y-6">
+          <div className="flex justify-between items-start">
+            <div>
+              <span className="px-2 py-0.5 bg-emerald-500/10 text-emerald-500 text-[9px] font-black uppercase tracking-widest rounded-md">v7.22</span>
+              <p className="text-[10px] text-neutral-500 mt-1 font-bold">14 Mai 2026</p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 h-[300px] overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-neutral-800 scrollbar-track-transparent">
+            {/* Nouveautés */}
+            <div className="space-y-3">
+              <h4 className="text-[11px] font-black text-white uppercase tracking-wider flex items-center gap-2">
+                <Zap className="w-3 h-3 text-yellow-500" /> Nouveautés
+              </h4>
+              <ul className="space-y-2">
+                {[
+                  "Barre de recherche produits globale",
+                  "Support des codes internes magasin",
+                  "Badges EAN exact / Produit comparable",
+                  "Recherche concurrentielle optimisée",
+                  "Historique des relevés enrichi"
+                ].map((item, i) => (
+                  <li key={i} className="flex gap-2 text-[11px] text-neutral-400 leading-tight">
+                    <span className="text-emerald-500 mt-0.5">•</span> {item}
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            {/* Sécurité */}
+            <div className="space-y-3">
+              <h4 className="text-[11px] font-black text-white uppercase tracking-wider flex items-center gap-2">
+                <Shield className="w-3 h-3 text-blue-500" /> Sécurité & Permissions
+              </h4>
+              <ul className="space-y-2">
+                {[
+                  "Sécurisation des exports Excel par rôle",
+                  "Filtre automatique : Mes relevés uniquement (Utilisateur)",
+                  "Hiérarchie Admin / Adhérant / Manager / Utilisateur",
+                  "Audit : Identification 'Créé par' dans Excel",
+                  "Correction du compteur de lignes exportables"
+                ].map((item, i) => (
+                  <li key={i} className="flex gap-2 text-[11px] text-neutral-400 leading-tight">
+                    <span className="text-blue-500 mt-0.5">•</span> {item}
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            {/* Mobile */}
+            <div className="space-y-3">
+              <h4 className="text-[11px] font-black text-white uppercase tracking-wider flex items-center gap-2">
+                <Gauge className="w-3 h-3 text-violet-500" /> Mobile & Terrain
+              </h4>
+              <ul className="space-y-2">
+                {[
+                  "Optimisations PWA Android & iOS",
+                  "Fluidité accrue sur l'interface terrain",
+                  "Performances globales stabilisées"
+                ].map((item, i) => (
+                  <li key={i} className="flex gap-2 text-[11px] text-neutral-400 leading-tight">
+                    <span className="text-violet-500 mt-0.5">•</span> {item}
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            {/* Correctifs */}
+            <div className="space-y-3">
+              <h4 className="text-[11px] font-black text-white uppercase tracking-wider flex items-center gap-2">
+                <Settings className="w-3 h-3 text-neutral-500" /> Correctifs
+              </h4>
+              <ul className="space-y-2">
+                {[
+                  "Corrections des jointures exports Excel",
+                  "Stabilisation des accès API",
+                  "Divers correctifs UI et performances"
+                ].map((item, i) => (
+                  <li key={i} className="flex gap-2 text-[11px] text-neutral-400 leading-tight">
+                    <span className="text-neutral-600 mt-0.5">•</span> {item}
+                  </li>
+                ))}
+              </ul>
+            </div>
           </div>
         </div>
       </section>
