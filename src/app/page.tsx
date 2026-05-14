@@ -20,7 +20,11 @@ export const dynamic = "force-dynamic";
 export const fetchCache = "force-no-store";
 
 export default async function Home() {
-  // 1. Récupérer les Stats (KPIs)
+  interface RayonRow { rayon: string; }
+  interface ConcurrentRow { enseigne: string; }
+  interface RecentProduct { ean: string; titre: string; prix: number; enseigne: string; updated_at: string; }
+  interface SupportSummary { unread_count_admin: number; unread_count_user: number; }
+
   const [
     { count: totalProduits },
     { count: totalReleves },
@@ -35,8 +39,8 @@ export default async function Home() {
     supabase.from("historique_activites").select("*").order("created_at", { ascending: false }).limit(8)
   ]);
 
-  const totalRayons = new Set(rawRayons?.map(r => r.rayon)).size;
-  const totalConcurrents = new Set(rawConcurrents?.map(c => c.enseigne)).size;
+  const totalRayons = new Set((rawRayons as RayonRow[] | null)?.map(r => r.rayon) || []).size;
+  const totalConcurrents = new Set((rawConcurrents as ConcurrentRow[] | null)?.map(c => c.enseigne) || []).size;
 
   // 2. Historique pour le mobile (reprise rapide)
   const { data: recents } = await supabase
@@ -45,7 +49,7 @@ export default async function Home() {
     .order("updated_at", { ascending: false })
     .limit(10);
   
-  const uniqueRecents = Array.from(new Map(recents?.map(item => [item.ean, item]) || []).values()).slice(0, 5);
+  const uniqueRecents = Array.from(new Map((recents as RecentProduct[] | null)?.map(item => [item.ean, item]) || []).values()).slice(0, 5);
 
   // 3. Récupérer le rôle de l'utilisateur
   const { data: { user } } = await supabase.auth.getUser();
@@ -67,7 +71,7 @@ export default async function Home() {
     .from("support_conversations")
     .select("unread_count_admin, unread_count_user");
   
-  const unreadCount = convs?.reduce((acc, c) => acc + (c.unread_count_admin || 0) + (c.unread_count_user || 0), 0) || 0;
+  const unreadCount = (convs as SupportSummary[] | null)?.reduce((acc, c) => acc + (c.unread_count_admin || 0) + (c.unread_count_user || 0), 0) || 0;
 
   return (
     <main className="min-h-full bg-[#0a0a0c] selection:bg-red-500/30">
