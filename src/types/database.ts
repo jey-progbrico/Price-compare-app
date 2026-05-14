@@ -60,5 +60,14 @@ export interface PriceLog {
 }
 
 // Types utilitaires pour les retours Supabase partiels
-export interface RayonRow { rayon: string; }
-export interface ConcurrentRow { enseigne: string; }
+export interface RayonRow { 
+  rayon: string | null; 
+}
+
+export interface GroupeRow { 
+  groupe_produit: string | null; 
+}
+
+export interface ConcurrentRow { 
+  enseigne: string; 
+}
