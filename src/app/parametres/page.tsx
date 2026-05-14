@@ -372,6 +372,7 @@ export default function ParametresPage() {
               </div>
             </div>
           </section>
+        </div>
 
       {canImport && (
         <section className="space-y-3">
