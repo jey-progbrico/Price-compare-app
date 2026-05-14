@@ -10,12 +10,19 @@ export default async function GroupeProduitsPage({ params }: { params: Promise<{
 
   console.log(`[NAV DEBUG] Slug reçu : rayon=${slug}, groupe=${groupeSlug}`);
 
+  interface RayonDataRow {
+    rayon: string | null;
+    groupe_produit: string | null;
+  }
+
   // 1. Récupérer les noms exacts en base de données pour éviter les erreurs d'accents/casse
   const { data: allData } = await supabase
     .from("produits")
     .select("rayon, groupe_produit")
     .not("rayon", "is", null)
     .not("groupe_produit", "is", null);
+
+  const rows = (allData as RayonDataRow[]) || [];
 
   // Fonction de normalisation pour comparaison
   const normalize = (str: string) => 
@@ -24,12 +31,12 @@ export default async function GroupeProduitsPage({ params }: { params: Promise<{
       .replace(/[\s-]/g, '')
       .normalize("NFD").replace(/[\u0300-\u036f]/g, ""); // Enlever accents
 
-  const rayonName = Array.from(new Set(allData?.map(r => r.rayon) || [])).find(r => 
-    normalize(r!) === normalize(slug)
+  const rayonName = Array.from(new Set(rows.map(r => r.rayon || ""))).find(r => 
+    normalize(r) === normalize(slug)
   ) || decodeURIComponent(slug).replace(/-/g, ' ');
 
-  const groupeName = Array.from(new Set(allData?.filter(r => r.rayon === rayonName).map(r => r.groupe_produit) || [])).find(g => 
-    normalize(g!) === normalize(groupeSlug)
+  const groupeName = Array.from(new Set(rows.filter(r => r.rayon === rayonName).map(r => r.groupe_produit || ""))).find(g => 
+    normalize(g) === normalize(groupeSlug)
   ) || decodeURIComponent(groupeSlug).replace(/-/g, ' ');
 
   console.log(`[NAV DEBUG] Valeurs converties : rayon="${rayonName}", groupe="${groupeName}"`);
