@@ -44,10 +44,16 @@ export default function EditProductModal({ produit, onClose }: Props) {
 
   useEffect(() => {
     const fetchMeta = async () => {
+      interface ProduitMetaRow {
+        rayon: string | null;
+        groupe_produit: string | null;
+      }
+      
       const { data } = await supabase.from("produits").select("rayon, groupe_produit");
       if (data) {
-        setRayons(Array.from(new Set(data.map(r => r.rayon).filter(Boolean))) as string[]);
-        setGroupes(Array.from(new Set(data.map(r => r.groupe_produit).filter(Boolean))) as string[]);
+        const rows = data as ProduitMetaRow[];
+        setRayons(Array.from(new Set(rows.map(r => r.rayon).filter((r): r is string => !!r))));
+        setGroupes(Array.from(new Set(rows.map(r => r.groupe_produit).filter((r): r is string => !!r))));
       }
     };
     fetchMeta();
