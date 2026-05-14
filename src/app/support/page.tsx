@@ -19,12 +19,13 @@ import { createClient } from "@/lib/supabase/client";
 import { useProfile } from "@/hooks/useProfile";
 import { format, formatDistanceToNow } from "date-fns";
 import { fr } from "date-fns/locale";
+import { SupportConversation, SupportMessage } from "@/types/support";
 
 export default function AdminSupportPage() {
   const { profile, isAdmin, loading: profileLoading } = useProfile();
-  const [conversations, setConversations] = useState<any[]>([]);
-  const [selectedConv, setSelectedConv] = useState<any>(null);
-  const [messages, setMessages] = useState<any[]>([]);
+  const [conversations, setConversations] = useState<SupportConversation[]>([]);
+  const [selectedConv, setSelectedConv] = useState<SupportConversation | null>(null);
+  const [messages, setMessages] = useState<SupportMessage[]>([]);
   const [newMessage, setNewMessage] = useState("");
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
@@ -50,18 +51,18 @@ export default function AdminSupportPage() {
           console.error("Supabase fetch error:", error);
           throw error;
         }
-        setConversations(data || []);
+        setConversations(data as SupportConversation[] || []);
 
         // Fetch emails séparément pour éviter les bugs de jointure
         if (data && data.length > 0) {
-          const userIds = Array.from(new Set(data.map((c: any) => c.user_id)));
+          const userIds = Array.from(new Set(data.map((c: SupportConversation) => c.user_id)));
           const { data: profiles, error: pError } = await supabase
             .from("profiles")
             .select("id, email")
             .in("id", userIds);
           
           if (!pError && profiles) {
-            const emailMap = profiles.reduce((acc: any, p: any) => ({
+            const emailMap = (profiles as any[]).reduce((acc: any, p: any) => ({
               ...acc,
               [p.id]: p.email
             }), {});
@@ -104,7 +105,7 @@ export default function AdminSupportPage() {
         .order("created_at", { ascending: true });
 
       if (!error) {
-        setMessages(data || []);
+        setMessages(data as SupportMessage[] || []);
         // Marquer comme lu pour l'admin
         if (selectedConv.unread_count_admin > 0) {
           // Update local state first (optimistic)
@@ -138,11 +139,12 @@ export default function AdminSupportPage() {
           filter: `conversation_id=eq.${selectedConv.id}`,
         },
         (payload) => {
-          setMessages((prev) => [...prev, payload.new]);
+          const newMsg = payload.new as SupportMessage;
+          setMessages((prev) => [...prev, newMsg]);
           // Marquer comme lu si c'est un message user et que la conversation est active
-          if (!payload.new.is_admin) {
+          if (!newMsg.is_admin) {
              setConversations(prev => prev.map(c => 
-               c.id === selectedConv.id ? { ...c, unread_count_admin: 0, last_message: payload.new.message } : c
+               c.id === selectedConv.id ? { ...c, unread_count_admin: 0, last_message: newMsg.message } : c
              ));
              
              supabase
@@ -189,7 +191,7 @@ export default function AdminSupportPage() {
     }
   };
 
-  const toggleStatus = async (conv: any) => {
+  const toggleStatus = async (conv: SupportConversation) => {
      const newStatus = conv.status === "open" ? "closed" : "open";
      const { error } = await supabase
        .from("support_conversations")

@@ -7,12 +7,13 @@ import { createClient } from "@/lib/supabase/client";
 import { useProfile } from "@/hooks/useProfile";
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
+import { SupportConversation, SupportMessage } from "@/types/support";
 
 export default function SupportBubble() {
   const { profile } = useProfile();
   const [isOpen, setIsOpen] = useState(false);
-  const [conversation, setConversation] = useState<any>(null);
-  const [messages, setMessages] = useState<any[]>([]);
+  const [conversation, setConversation] = useState<SupportConversation | null>(null);
+  const [messages, setMessages] = useState<SupportMessage[]>([]);
   const [newMessage, setNewMessage] = useState("");
   const [loading, setLoading] = useState(false);
   const [sending, setSending] = useState(false);
@@ -97,7 +98,7 @@ export default function SupportBubble() {
           filter: `user_id=eq.${profile.id}`,
         },
         (payload) => {
-          setConversation(payload.new);
+          setConversation(payload.new as SupportConversation);
         }
       )
       .subscribe();
@@ -116,9 +117,10 @@ export default function SupportBubble() {
             filter: `conversation_id=eq.${conversation.id}`,
           },
           (payload) => {
-            setMessages((prev) => [...prev, payload.new]);
+            const newMsg = payload.new as SupportMessage;
+            setMessages((prev) => [...prev, newMsg]);
             // Marquer comme lu si c'est un admin qui écrit et que le chat est ouvert
-            if (payload.new.is_admin) {
+            if (newMsg.is_admin) {
                setConversation(prev => prev ? { ...prev, unread_count_user: 0 } : null);
                supabase
                 .from("support_conversations")
