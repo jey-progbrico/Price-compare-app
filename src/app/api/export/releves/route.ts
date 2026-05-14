@@ -3,6 +3,8 @@ import { supabase } from "@/lib/supabase";
 import * as XLSX from "xlsx";
 import { enrichWithProducts } from "@/lib/data-utils";
 
+import { PriceLog } from "@/types/database";
+
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const dateStart = searchParams.get("dateStart");
@@ -28,7 +30,7 @@ export async function GET(request: Request) {
     }
 
     // 2. Enrichissement manuel via le helper centralisé
-    let releves = await enrichWithProducts(rawReleves);
+    const releves = await enrichWithProducts(rawReleves as PriceLog[]);
 
     // 3. Filtrage par rayon et formatage
     const excelData = releves
