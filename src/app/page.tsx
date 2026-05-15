@@ -21,13 +21,15 @@ import {
   RayonRow, 
   ConcurrentRow, 
   PriceCache as RecentProduct, 
-  Activity as ActivityRow 
+  Activity as ActivityRow,
+  PriceLog
 } from "@/types/database";
 
 export const dynamic = "force-dynamic";
 export const fetchCache = "force-no-store";
 
 import GlobalSearchBar from "@/components/GlobalSearchBar";
+import DashboardKPIs from "@/components/DashboardKPIs";
 
 export default async function Home() {
   const [
@@ -63,6 +65,35 @@ export default async function Home() {
   const isManager = profile?.role === 'manager';
   const canImport = isAdmin || isAdherant;
   const canExport = isAdmin || isAdherant || isManager;
+  const isManagement = isAdmin || isAdherant || isManager;
+
+  // 4. Données pour le Dashboard KPI (Management uniquement)
+  let kpiData: any[] = [];
+  if (isManagement) {
+    const { data: rawReleves } = await supabase
+      .from("releves_prix")
+      .select("enseigne, prix_constate, created_by, ean") as { data: PriceLog[] | null };
+    
+    if (rawReleves && rawReleves.length > 0) {
+      const eans = Array.from(new Set(rawReleves.map(r => r.ean).filter(ean => !!ean)));
+      const userIds = Array.from(new Set(rawReleves.map(r => r.created_by).filter(id => !!id)));
+
+      const [{ data: products }, { data: profiles }] = await Promise.all([
+        supabase.from("produits").select("numero_ean, prix_vente").in("numero_ean", eans),
+        supabase.from("profiles").select("id, email").in("id", userIds)
+      ]);
+
+      const productMap = new Map((products as any[] | null)?.map(p => [p.numero_ean, p.prix_vente]) || []);
+      const profileMap = new Map((profiles as any[] | null)?.map(p => [p.id, p.email]) || []);
+
+      kpiData = rawReleves.map((r: PriceLog) => ({
+        enseigne: r.enseigne,
+        prix_constate: r.prix_constate,
+        prix_vente: productMap.get(r.ean) || null,
+        user_email: profileMap.get(r.created_by || "") || "Utilisateur"
+      }));
+    }
+  }
 
   // 4. Alertes Support (pour badge mobile)
   const { data: convs } = await supabase
@@ -107,6 +138,17 @@ export default async function Home() {
         <div className="max-w-4xl">
           <GlobalSearchBar placeholder="Chercher un produit, une marque ou un EAN..." />
         </div>
+
+        {/* DASHBOARD MANAGEMENT */}
+        {isManagement && kpiData.length > 0 && (
+          <section className="space-y-6">
+            <div className="flex items-center gap-3">
+              <BarChart3 className="w-5 h-5 text-red-600" />
+              <h2 className="text-xl font-black text-white uppercase tracking-tight">Analyse Métier & Performance</h2>
+            </div>
+            <DashboardKPIs data={kpiData} />
+          </section>
+        )}
 
         <div className="grid grid-cols-3 gap-10">
           {/* Activités Récentes */}
