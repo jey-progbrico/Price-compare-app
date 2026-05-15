@@ -1,0 +1,103 @@
+| table_name            |
+| --------------------- |
+| cache_prix            |
+| historique_activites  |
+| historique_recherches |
+| produits              |
+| profiles              |
+| releves_prix          |
+| settings              |
+| statut_concurrents    |
+| support_conversations |
+| support_messages      |
+=== COLUMNS ===
+| table_name            | column_name            | data_type                |
+| --------------------- | ---------------------- | ------------------------ |
+| cache_prix            | ean                    | character varying        |
+| cache_prix            | enseigne               | character varying        |
+| cache_prix            | titre                  | text                     |
+| cache_prix            | prix                   | numeric                  |
+| cache_prix            | lien                   | text                     |
+| cache_prix            | prix_precedent         | numeric                  |
+| cache_prix            | date_changement_prix   | timestamp with time zone |
+| cache_prix            | updated_at             | timestamp with time zone |
+| cache_prix            | last_searched_at       | timestamp with time zone |
+| cache_prix            | last_success_at        | timestamp with time zone |
+| cache_prix            | source                 | character varying        |
+| cache_prix            | image_url              | text                     |
+| cache_prix            | reliability_score      | double precision         |
+| cache_prix            | prix_status            | text                     |
+| historique_activites  | id                     | uuid                     |
+| historique_activites  | created_at             | timestamp with time zone |
+| historique_activites  | type_action            | text                     |
+| historique_activites  | ean                    | text                     |
+| historique_activites  | details                | jsonb                    |
+| historique_activites  | user_id                | uuid                     |
+| historique_recherches | id                     | uuid                     |
+| historique_recherches | ean                    | character varying        |
+| historique_recherches | enseigne               | character varying        |
+| historique_recherches | statut                 | character varying        |
+| historique_recherches | message_erreur         | text                     |
+| historique_recherches | created_at             | timestamp with time zone |
+| produits              | id                     | bigint                   |
+| produits              | description_produit    | text                     |
+| produits              | numero_ean             | text                     |
+| produits              | groupe_produit         | text                     |
+| produits              | marque                 | text                     |
+| produits              | prix_vente             | numeric                  |
+| produits              | devise                 | text                     |
+| produits              | reference_fabricant    | character varying        |
+| produits              | categorie              | character varying        |
+| produits              | created_at             | timestamp with time zone |
+| produits              | updated_at             | timestamp with time zone |
+| produits              | rayon                  | text                     |
+| produits              | code_interne           | text                     |
+| profiles              | id                     | uuid                     |
+| profiles              | email                  | text                     |
+| profiles              | role                   | text                     |
+| profiles              | created_at             | timestamp with time zone |
+| profiles              | display_name           | text                     |
+| releves_prix          | id                     | uuid                     |
+| releves_prix          | ean                    | text                     |
+| releves_prix          | designation_originale  | text                     |
+| releves_prix          | designation_normalisee | text                     |
+| releves_prix          | enseigne               | text                     |
+| releves_prix          | url                    | text                     |
+| releves_prix          | prix_constate          | numeric                  |
+| releves_prix          | created_at             | timestamp with time zone |
+| releves_prix          | match_type             | text                     |
+| releves_prix          | created_by             | uuid                     |
+| settings              | key                    | text                     |
+| settings              | value                  | text                     |
+| settings              | updated_at             | timestamp with time zone |
+| statut_concurrents    | enseigne               | character varying        |
+| statut_concurrents    | statut                 | character varying        |
+| statut_concurrents    | score_fiabilite        | numeric                  |
+| statut_concurrents    | total_requetes         | integer                  |
+| statut_concurrents    | total_succes           | integer                  |
+| statut_concurrents    | total_403              | integer                  |
+| statut_concurrents    | consecutive_403        | integer                  |
+| statut_concurrents    | dernier_succes         | timestamp with time zone |
+| statut_concurrents    | dernier_echec          | timestamp with time zone |
+| statut_concurrents    | derniere_erreur        | text                     |
+| statut_concurrents    | updated_at             | timestamp with time zone |
+| support_conversations | id                     | uuid                     |
+| support_conversations | user_id                | uuid                     |
+| support_conversations | created_at             | timestamp with time zone |
+| support_conversations | updated_at             | timestamp with time zone |
+| support_conversations | status                 | text                     |
+| support_conversations | last_message           | text                     |
+| support_conversations | unread_count_admin     | integer                  |
+| support_conversations | unread_count_user      | integer                  |
+| support_messages      | id                     | uuid                     |
+| support_messages      | conversation_id        | uuid                     |
+| support_messages      | sender_id              | uuid                     |
+| support_messages      | message                | text                     |
+| support_messages      | created_at             | timestamp with time zone |
+| support_messages      | is_admin               | boolean                  |
+=== RELATIONS ===
+| table_name           | column_name     | foreign_table_name    | foreign_column_name |
+| -------------------- | --------------- | --------------------- | ------------------- |
+| support_messages     | conversation_id | support_conversations | id                  |
+| historique_activites | user_id         | profiles              | id                  |
+| releves_prix         | created_by      | profiles              | id                  |
