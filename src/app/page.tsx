@@ -80,9 +80,16 @@ export default async function Home() {
       const eans = Array.from(new Set(rawReleves.map(r => r.ean).filter(ean => !!ean)));
       const userIds = Array.from(new Set(rawReleves.map(r => r.created_by).filter(id => !!id)));
 
+      // Utilisation d'un client admin pour les KPIs afin de garantir l'accès aux noms d'affichage pour le management
+      const { createClient: createSupabaseAdmin } = await import("@supabase/supabase-js");
+      const supabaseAdmin = createSupabaseAdmin(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.SUPABASE_SERVICE_ROLE_KEY!
+      );
+
       const [{ data: products }, { data: profiles }] = await Promise.all([
         supabase.from("produits").select("numero_ean, prix_vente").in("numero_ean", eans),
-        supabase.from("profiles").select("id, email, display_name").in("id", userIds)
+        supabaseAdmin.from("profiles").select("id, email, display_name").in("id", userIds)
       ]);
 
       const productMap = new Map((products as any[] | null)?.map(p => [p.numero_ean, p.prix_vente]) || []);

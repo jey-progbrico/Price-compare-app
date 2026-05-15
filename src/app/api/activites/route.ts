@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase";
+import { createClient } from "@/lib/supabase/server";
 import { enrichWithProducts } from "@/lib/data-utils";
 import { Activity } from "@/types/database";
 
@@ -8,11 +8,18 @@ import { Activity } from "@/types/database";
  * Récupère les dernières activités chronologiquement
  */
 export async function GET(request: Request) {
+  const supabase = await createClient();
   const { searchParams } = new URL(request.url);
   const limit = parseInt(searchParams.get("limit") || "50");
 
   try {
-    const { data: rawActivities, error } = await supabase
+    const { createClient: createSupabaseAdmin } = await import("@supabase/supabase-js");
+    const supabaseAdmin = createSupabaseAdmin(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    );
+
+    const { data: rawActivities, error } = await supabaseAdmin
       .from("historique_activites")
       .select("*, profiles(display_name, email)")
       .order("created_at", { ascending: false })
@@ -35,6 +42,7 @@ export async function GET(request: Request) {
  * Body: { type_action: string, ean?: string, details?: object }
  */
 export async function POST(request: Request) {
+  const supabase = await createClient();
   try {
     const body = await request.json();
     const { type_action, ean, details } = body;
@@ -43,6 +51,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Type d'action manquant" }, { status: 400 });
     }
 
+    const { data: { user } } = await supabase.auth.getUser();
+
     const { data, error } = await supabase
       .from("historique_activites")
       .insert([
@@ -50,6 +60,7 @@ export async function POST(request: Request) {
           type_action, 
           ean, 
           details,
+          user_id: user?.id || null, // Ensure we track who did what if column exists
           created_at: new Date().toISOString()
         }
       ])

@@ -50,8 +50,14 @@ export async function GET(request: Request) {
     }
 
     // 2. Récupération des profils pour l'identification "Créé par"
-    // On récupère tous les profils pour mapper les emails (plus simple et performant sur de petites équipes)
-    const { data: allProfiles } = await supabase
+    // Utilisation d'un client admin pour outrepasser les RLS et garantir l'identification des auteurs
+    const { createClient: createSupabaseAdmin } = await import("@supabase/supabase-js");
+    const supabaseAdmin = createSupabaseAdmin(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    );
+
+    const { data: allProfiles } = await supabaseAdmin
       .from("profiles")
       .select("id, email, display_name");
     

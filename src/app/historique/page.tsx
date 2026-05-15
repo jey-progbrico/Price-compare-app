@@ -1,4 +1,4 @@
-import { supabase } from "@/lib/supabase";
+import { createClient } from "@/lib/supabase/server";
 import { Zap, Package, Tag, Clock, ArrowRight } from "lucide-react";
 import Link from "next/link";
 
@@ -20,15 +20,21 @@ interface HistoriqueActivity {
 }
 
 async function getActivites() {
+  const { createClient: createSupabaseAdmin } = await import("@supabase/supabase-js");
+  const supabaseAdmin = createSupabaseAdmin(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
+
   // 1. Charger les 15 derniers relevés (bruts)
-  const { data: rawReleves } = await supabase
+  const { data: rawReleves } = await supabaseAdmin
     .from("releves_prix")
     .select("*, profiles(display_name, email)")
     .order("created_at", { ascending: false })
     .limit(15);
 
   // 2. Charger les 10 dernières consultations (brutes)
-  const { data: rawConsultations } = await supabase
+  const { data: rawConsultations } = await supabaseAdmin
     .from("historique_consultations")
     .select("*")
     .order("created_at", { ascending: false })
