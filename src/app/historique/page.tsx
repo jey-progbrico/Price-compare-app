@@ -9,7 +9,7 @@ import { PriceLog, ConsultationRow } from "@/types/database";
 
 interface HistoriqueActivity {
   id: string;
-  type: "releve" | "consultation";
+  type: "releve";
   date: Date;
   ean: string;
   enseigne?: string;
@@ -33,20 +33,10 @@ async function getActivites() {
     .order("created_at", { ascending: false })
     .limit(15);
 
-  // 2. Charger les 10 dernières consultations (brutes)
-  const { data: rawConsultations } = await supabaseAdmin
-    .from("historique_consultations")
-    .select("*")
-    .order("created_at", { ascending: false })
-    .limit(10);
+  // 2. Enrichir avec les détails produits via le helper
+  const releves = await enrichWithProducts((rawReleves as PriceLog[]) || []);
 
-  // 3. Enrichir les deux listes avec les détails produits via le helper
-  const [releves, consultations] = await Promise.all([
-    enrichWithProducts((rawReleves as PriceLog[]) || []),
-    enrichWithProducts((rawConsultations as ConsultationRow[]) || [])
-  ]);
-
-  // 4. Fusionner et typer pour l'affichage
+  // 3. Fusionner et typer pour l'affichage
   const activites: HistoriqueActivity[] = [];
 
   releves.forEach(r => {
@@ -63,17 +53,6 @@ async function getActivites() {
     });
   });
 
-  consultations.forEach(c => {
-    activites.push({
-      id: `cons-${c.id}`,
-      type: "consultation",
-      date: new Date(c.created_at),
-      ean: c.ean,
-      titre: c.produit?.description_produit || "Fiche consultée",
-      marque: c.produit?.marque,
-      prix: c.produit?.prix_vente
-    });
-  });
 
   return activites.sort((a, b) => b.date.getTime() - a.date.getTime());
 }
@@ -102,15 +81,9 @@ export default async function HistoriquePage() {
           >
             <div className="flex justify-between items-start mb-3">
               <div className="flex items-center gap-2">
-                {act.type === "releve" ? (
                   <div className="px-2 py-0.5 bg-emerald-900/30 text-emerald-500 text-[10px] font-bold rounded border border-emerald-800/50 uppercase tracking-widest">
                     Nouveau Relevé
                   </div>
-                ) : (
-                  <div className="px-2 py-0.5 bg-neutral-800 text-neutral-400 text-[10px] font-bold rounded border border-neutral-700 uppercase tracking-widest">
-                    Consultation
-                  </div>
-                )}
                 <span className="text-[10px] text-neutral-600 font-mono">
                   {act.date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                 </span>
@@ -121,11 +94,7 @@ export default async function HistoriquePage() {
             </div>
 
             <div className="flex gap-4">
-              <div className={`w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 border ${
-                act.type === "releve" ? "bg-emerald-950/20 border-emerald-900/30 text-emerald-500" : "bg-neutral-950 border-neutral-800 text-neutral-600"
-              }`}>
-                {act.type === "releve" ? <Tag className="w-6 h-6" /> : <Clock className="w-6 h-6" />}
-              </div>
+                <Tag className="w-6 h-6" />
               
               <div className="flex-1 min-w-0">
                 <h4 className="text-white text-sm font-bold truncate">{act.titre}</h4>
@@ -140,7 +109,7 @@ export default async function HistoriquePage() {
                   {act.prix?.toFixed(2)}€
                 </div>
                 <div className="text-[9px] font-bold uppercase tracking-tighter mt-1 text-neutral-500">
-                  {act.type === "releve" ? act.enseigne : "Mon Magasin"}
+                  {act.enseigne}
                 </div>
               </div>
             </div>

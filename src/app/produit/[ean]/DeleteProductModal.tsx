@@ -29,7 +29,6 @@ export default function DeleteProductModal({ produit, onClose }: Props) {
   const [stats, setStats] = useState({
     releves: 0,
     activites: 0,
-    consultations: 0,
     loading: true
   });
   const [mounted, setMounted] = useState(false);
@@ -40,16 +39,14 @@ export default function DeleteProductModal({ produit, onClose }: Props) {
     setMounted(true);
     const fetchStats = async () => {
       try {
-        const [relevesRes, activitesRes, consultationsRes] = await Promise.all([
+        const [relevesRes, activitesRes] = await Promise.all([
           supabase.from("releves_prix").select("id", { count: "exact", head: true }).eq("ean", produit.numero_ean),
           supabase.from("historique_activites").select("id", { count: "exact", head: true }).eq("ean", produit.numero_ean),
-          supabase.from("historique_consultations").select("id", { count: "exact", head: true }).eq("ean", produit.numero_ean),
         ]);
 
         setStats({
           releves: relevesRes.count || 0,
           activites: activitesRes.count || 0,
-          consultations: consultationsRes.count || 0,
           loading: false
         });
       } catch (err) {
@@ -61,7 +58,7 @@ export default function DeleteProductModal({ produit, onClose }: Props) {
     fetchStats();
   }, [produit.numero_ean]);
 
-  const hasLinkedData = stats.releves > 0 || stats.activites > 0 || stats.consultations > 0;
+  const hasLinkedData = stats.releves > 0 || stats.activites > 0;
 
   const handleDelete = async () => {
     // Basic validation for desktop
@@ -151,7 +148,7 @@ export default function DeleteProductModal({ produit, onClose }: Props) {
               <p className="text-xs text-neutral-400 leading-relaxed">
                 Ce produit possède des données historiques liées. Elles seront <span className="text-white font-bold underline">conservées</span> mais le produit disparaîtra du catalogue actif.
               </p>
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-2 gap-2">
                 <div className="bg-black/40 rounded-xl p-3 border border-white/5 flex flex-col items-center">
                   <Database className="w-3 h-3 text-neutral-600 mb-1" />
                   <span className="text-lg font-black text-white">{stats.releves}</span>
@@ -161,11 +158,6 @@ export default function DeleteProductModal({ produit, onClose }: Props) {
                   <History className="w-3 h-3 text-neutral-600 mb-1" />
                   <span className="text-lg font-black text-white">{stats.activites}</span>
                   <span className="text-[8px] font-bold text-neutral-500 uppercase">Actions</span>
-                </div>
-                <div className="bg-black/40 rounded-xl p-3 border border-white/5 flex flex-col items-center">
-                  <Eye className="w-3 h-3 text-neutral-600 mb-1" />
-                  <span className="text-lg font-black text-white">{stats.consultations}</span>
-                  <span className="text-[8px] font-bold text-neutral-500 uppercase">Vues</span>
                 </div>
               </div>
             </div>
