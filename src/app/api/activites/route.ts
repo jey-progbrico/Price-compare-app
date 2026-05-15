@@ -14,7 +14,7 @@ export async function GET(request: Request) {
   try {
     const { data: rawActivities, error } = await supabase
       .from("historique_activites")
-      .select("*")
+      .select("*, profiles(display_name, email)")
       .order("created_at", { ascending: false })
       .limit(limit);
 

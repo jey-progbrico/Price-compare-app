@@ -65,6 +65,10 @@ export interface PriceLog {
   match_type?: "exact" | "equivalent" | null;
   created_by?: string | null;
   created_at: string;
+  profiles?: {
+    display_name: string | null;
+    email: string | null;
+  } | null;
 }
 
 // Types utilitaires pour les retours Supabase partiels

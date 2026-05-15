@@ -28,6 +28,10 @@ interface Activity {
     marque: string;
     rayon: string;
   };
+  profiles?: {
+    display_name: string | null;
+    email: string | null;
+  } | null;
 }
 
 const ACTION_CONFIG: Record<string, { label: string, color: string, icon: any }> = {
@@ -42,7 +46,8 @@ const ACTION_CONFIG: Record<string, { label: string, color: string, icon: any }>
 const columns = [
   { key: "type_action", header: "Action" },
   { key: "ean", header: "Produit concerné" },
-  { key: "details", header: "Détails de l'opération" },
+  { key: "details", header: "Détails" },
+  { key: "profiles", header: "Utilisateur" },
   { key: "created_at", header: "Date & Heure", className: "text-right" },
 ];
 
@@ -147,6 +152,12 @@ export default function ActivitesPage() {
                         )}
                       </div>
                     </td>
+                    <td className="px-6 py-4">
+                      <div className="flex flex-col">
+                        <span className="text-xs font-bold text-white">{activity.profiles?.display_name || "Utilisateur"}</span>
+                        <span className="text-[10px] text-neutral-600">{activity.profiles?.email || "Système"}</span>
+                      </div>
+                    </td>
                     <td className="px-6 py-4 text-right">
                       <div className="flex flex-col items-end">
                         <span className="text-sm font-bold text-neutral-300">{formatDate(activity.created_at)}</span>
@@ -185,6 +196,10 @@ export default function ActivitesPage() {
                         <Clock className="w-3 h-3" />
                         {formatDate(activity.created_at)} • {formatTime(activity.created_at)}
                       </span>
+                    </div>
+                    
+                    <div className="flex items-center gap-2 mb-1 px-1">
+                       <span className="text-[9px] font-black text-red-500 uppercase tracking-widest">{activity.profiles?.display_name || activity.profiles?.email || "Système"}</span>
                     </div>
 
                     <div className="bg-neutral-900/40 border border-neutral-800/50 rounded-2xl p-4 space-y-3 hover:border-neutral-700 transition-all shadow-xl">

@@ -40,6 +40,7 @@ interface SearchResult {
   date_changement_prix?: string | null;
   match_type?: "exact" | "equivalent" | null;
   created_at?: string;
+  author_name?: string;
 }
 
 type SourceStatus = "pending" | "running" | "success" | "not_found" | "blocked" | "error" | "skipped";
@@ -324,6 +325,7 @@ function ManualVeilleCard({ res, index, ean, internalPrice, releveId, onDelete, 
           <div className="flex items-center gap-1 text-[9px] font-black text-neutral-600 uppercase tracking-widest bg-black/40 px-2 py-0.5 rounded-md border border-neutral-900">
             <Clock className="w-2.5 h-2.5" />
             {new Date(res.created_at).toLocaleDateString('fr-FR')} {new Date(res.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+            {res.author_name && <span className="ml-1 text-neutral-500">• {res.author_name}</span>}
           </div>
         )}
       </div>
@@ -510,7 +512,8 @@ export default function CompareButton({
                   prix: rel.prix_constate,
                   source: "releve_manuel",
                   match_type: rel.match_type,
-                  created_at: rel.created_at
+                  created_at: rel.created_at,
+                  author_name: rel.profiles?.display_name || rel.profiles?.email || (rel.created_by ? "Utilisateur" : "Système")
                 }}
                 index={i}
                 ean={ean}

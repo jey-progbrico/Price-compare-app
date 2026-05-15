@@ -81,7 +81,7 @@ export default function DashboardKPIs({ data }: Props) {
 
     return Object.entries(counts)
       .map(([email, count]) => ({
-        email: email.split("@")[0], // On cache la fin pour la confidentialité
+        email: email.includes("@") ? email.split("@")[0] : email, // On ne splite que si c'est un email
         fullEmail: email,
         count
       }))

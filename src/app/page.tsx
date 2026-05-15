@@ -92,7 +92,7 @@ export default async function Home() {
         enseigne: r.enseigne,
         prix_constate: r.prix_constate,
         prix_vente: productMap.get(r.ean) || null,
-        user_email: profileMap.get(r.created_by || "") || "Utilisateur"
+        user_email: profileMap.get(r.created_by || "") || (r.created_by ? "Utilisateur" : "Système")
       }));
     }
   }

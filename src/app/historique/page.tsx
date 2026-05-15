@@ -16,13 +16,14 @@ interface HistoriqueActivity {
   prix?: number | null;
   titre: string;
   marque?: string | null;
+  author?: string;
 }
 
 async function getActivites() {
   // 1. Charger les 15 derniers relevés (bruts)
   const { data: rawReleves } = await supabase
     .from("releves_prix")
-    .select("*")
+    .select("*, profiles(display_name, email)")
     .order("created_at", { ascending: false })
     .limit(15);
 
@@ -51,7 +52,8 @@ async function getActivites() {
       enseigne: r.enseigne,
       prix: r.prix_constate,
       titre: r.produit?.description_produit || r.designation_originale || "Produit",
-      marque: r.produit?.marque
+      marque: r.produit?.marque,
+      author: r.profiles?.display_name || r.profiles?.email || (r.created_by ? "Utilisateur" : "Système")
     });
   });
 
@@ -137,7 +139,12 @@ export default async function HistoriquePage() {
               </div>
             </div>
             
-            <div className="mt-4 pt-3 border-t border-neutral-800/50 flex justify-end">
+            <div className="mt-4 pt-3 border-t border-neutral-800/50 flex justify-between items-center">
+              {act.author && (
+                <div className="text-[9px] font-black text-red-500 uppercase tracking-widest">
+                  Par {act.author}
+                </div>
+              )}
               <div className="text-[10px] font-bold text-neutral-600 flex items-center gap-1">
                 VOIR LA FICHE <ArrowRight className="w-3 h-3" />
               </div>

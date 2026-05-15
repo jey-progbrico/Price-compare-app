@@ -21,7 +21,7 @@ export async function GET(request: NextRequest) {
   try {
     const { data, error } = await supabase
       .from("releves_prix")
-      .select("*")
+      .select("*, profiles(display_name, email)")
       .eq("ean", ean)
       .order("created_at", { ascending: false });
 
