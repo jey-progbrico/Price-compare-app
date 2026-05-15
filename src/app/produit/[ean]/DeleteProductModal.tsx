@@ -14,7 +14,7 @@ import {
   Eye
 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { supabase } from "@/lib/supabase";
+import { createClient } from "@/lib/supabase/client";
 
 import { Product } from "@/types/database";
 
@@ -24,6 +24,7 @@ interface Props {
 }
 
 export default function DeleteProductModal({ produit, onClose }: Props) {
+  const supabase = createClient();
   const [confirmText, setConfirmText] = useState("");
   const [loading, setLoading] = useState(false);
   const [stats, setStats] = useState({

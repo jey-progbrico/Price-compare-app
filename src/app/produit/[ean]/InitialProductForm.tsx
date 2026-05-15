@@ -2,13 +2,14 @@
 
 import { useState } from "react";
 import { Package, ShieldAlert, Loader2 } from "lucide-react";
-import { supabase } from "@/lib/supabase";
+import { createClient } from "@/lib/supabase/client";
 
 interface Props {
   ean: string;
 }
 
 export default function InitialProductForm({ ean }: Props) {
+  const supabase = createClient();
   const [marque, setMarque] = useState("");
   const [designation, setDesignation] = useState("");
   const [rayon, setRayon] = useState("");

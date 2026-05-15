@@ -14,7 +14,7 @@ import {
   Database,
   ArrowRight
 } from "lucide-react";
-import { supabase } from "@/lib/supabase";
+import { createClient } from "@/lib/supabase/client";
 import { RayonRow, GroupeRow, Product } from "@/types/database";
 
 interface Props {
@@ -23,6 +23,7 @@ interface Props {
 }
 
 export default function EditProductModal({ produit, onClose }: Props) {
+  const supabase = createClient();
   const [formData, setFormData] = useState({
     marque: produit.marque || "",
     description_produit: produit.description_produit || "",

@@ -14,7 +14,7 @@ import {
   Database
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { supabase } from "@/lib/supabase";
+import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import { RayonRow, Product } from "@/types/database";
 
@@ -26,6 +26,7 @@ interface Props {
 }
 
 export default function CreateProductModal({ isOpen, onClose, initialRayon, onSuccess }: Props) {
+  const supabase = createClient();
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
