@@ -23,15 +23,20 @@ export interface Activity {
   id: string;
   type_action: "import_produit" | "modification_produit" | "suppression_produit" | "scan_produit" | "creation_manuelle";
   ean?: string;
-  details?: any; // Les détails varient trop pour être strictement typés ici
+  details?: any;
   created_at: string;
   user_id?: string;
+  profiles?: {
+    display_name: string | null;
+    email: string | null;
+  } | null;
 }
 
 export interface Profile {
   id: string;
   email: string | null;
   role: "admin" | "adherant" | "manager" | "utilisateur";
+  display_name: string | null;
   created_at: string;
 }
 

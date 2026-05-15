@@ -96,7 +96,7 @@ export async function POST(request: NextRequest) {
       email,
       password,
       email_confirm: true,
-      user_metadata: { role }
+      user_metadata: { role, display_name: body.display_name }
     });
 
     if (createError) {
@@ -118,7 +118,6 @@ export async function POST(request: NextRequest) {
 
     if (fetchProfileError) {
       console.error("[API-ADMIN-USERS] Erreur Étape 3 (check profile):", fetchProfileError);
-      // On ne throw pas forcément ici, on tente quand même la suite ou le nettoyage
     }
 
     if (!existingProfile) {
@@ -129,28 +128,27 @@ export async function POST(request: NextRequest) {
           {
             id: newUser.user.id,
             email: email,
-            role: role
+            role: role,
+            display_name: body.display_name || null
           }
         ]);
       
       if (profileError) {
         console.error("[API-ADMIN-USERS] Erreur Étape 4 (insert profile):", profileError);
-        // Nettoyage si échec de la création du profil
         console.log("[API-ADMIN-USERS] Nettoyage: suppression auth.user UID:", newUser.user.id);
         await supabaseAdmin.auth.admin.deleteUser(newUser.user.id);
         throw profileError;
       }
       console.log("[API-ADMIN-USERS] Étape 4 Réussie (Insert manuel).");
     } else {
-      console.log("[API-ADMIN-USERS] Étape 5: Profil existant (Trigger), mise à jour du rôle:", role);
-      // Si le profil existe (via trigger), on s'assure que le rôle est correct
+      console.log("[API-ADMIN-USERS] Étape 5: Profil existant (Trigger), mise à jour du rôle/nom:", role);
       const { error: updateError } = await supabaseAdmin
         .from("profiles")
-        .update({ role })
+        .update({ role, display_name: body.display_name || existingProfile.display_name })
         .eq("id", newUser.user.id);
       
       if (updateError) {
-        console.error("[API-ADMIN-USERS] Erreur Étape 5 (update role):", updateError);
+        console.error("[API-ADMIN-USERS] Erreur Étape 5 (update profile):", updateError);
         throw updateError;
       }
       console.log("[API-ADMIN-USERS] Étape 5 Réussie (Update trigger profile).");
@@ -158,13 +156,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ success: true, user: newUser.user });
   } catch (err: any) {
-    console.error("[API-ADMIN-USERS] Erreur fatale capturée:", {
-      message: err.message,
-      code: err.code,
-      details: err.details,
-      hint: err.hint,
-      error_object: err
-    });
+    console.error("[API-ADMIN-USERS] Erreur fatale capturée:", err);
     return NextResponse.json({ 
       error: err.message || "Erreur lors de la création",
       details: err.details,
@@ -175,7 +167,8 @@ export async function POST(request: NextRequest) {
 
 /**
  * PATCH /api/admin/users
- * Réinitialise le mot de passe d'un utilisateur (Admin seulement).
+ * Met à jour un utilisateur (Admin seulement).
+ * Supporte : reset password, update role, update display_name.
  */
 export async function PATCH(request: NextRequest) {
   const supabase = await createServerClient();
@@ -185,7 +178,6 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
   }
 
-  // Vérifier le rôle de l'appelant
   const { data: callerProfile } = await supabase
     .from("profiles")
     .select("role")
@@ -198,40 +190,46 @@ export async function PATCH(request: NextRequest) {
 
   try {
     const body = await request.json();
-    const { userId, password } = body;
+    const { userId, password, role, display_name } = body;
 
-    if (!userId || !password) {
-      return NextResponse.json({ error: "Données manquantes" }, { status: 400 });
+    if (!userId) {
+      return NextResponse.json({ error: "ID utilisateur manquant" }, { status: 400 });
     }
 
-    if (password.length < 6) {
-      return NextResponse.json({ error: "Mot de passe trop court (min 6 caractères)" }, { status: 400 });
+    // 1. Mise à jour auth.users si password ou metadata changent
+    if (password || role || display_name) {
+      const updateData: any = {};
+      if (password) {
+        if (password.length < 6) throw new Error("Mot de passe trop court");
+        updateData.password = password;
+      }
+      if (role || display_name) {
+        updateData.user_metadata = {};
+        if (role) updateData.user_metadata.role = role;
+        if (display_name !== undefined) updateData.user_metadata.display_name = display_name;
+      }
+
+      const { error: authError } = await supabaseAdmin.auth.admin.updateUserById(userId, updateData);
+      if (authError) throw authError;
     }
 
-    // Empêcher l'admin de modifier son propre mot de passe via cet endpoint (sécurité)
-    // S'il veut changer son pass, il doit passer par le flux standard de changement de pass
-    // (Optionnel, mais plus sûr pour éviter les erreurs de manipulation sur son propre compte admin)
-    // if (userId === caller.id) {
-    //   return NextResponse.json({ error: "Utilisez les paramètres personnels pour changer votre mot de passe" }, { status: 400 });
-    // }
+    // 2. Mise à jour de la table profiles
+    const profileUpdate: any = {};
+    if (role) profileUpdate.role = role;
+    if (display_name !== undefined) profileUpdate.display_name = display_name;
 
-    console.log("[API-ADMIN-USERS] Reset mot de passe pour UID:", userId);
-    const { error: updateError } = await supabaseAdmin.auth.admin.updateUserById(
-      userId,
-      { password }
-    );
-
-    if (updateError) {
-      console.error("[API-ADMIN-USERS] Erreur reset password:", updateError);
-      throw updateError;
+    if (Object.keys(profileUpdate).length > 0) {
+      const { error: profileError } = await supabaseAdmin
+        .from("profiles")
+        .update(profileUpdate)
+        .eq("id", userId);
+      
+      if (profileError) throw profileError;
     }
 
-    return NextResponse.json({ success: true, message: "Mot de passe mis à jour avec succès" });
+    return NextResponse.json({ success: true });
   } catch (err: any) {
-    console.error("[API-ADMIN-USERS] Erreur fatale PATCH:", err);
-    return NextResponse.json({ 
-      error: err.message || "Erreur lors de la mise à jour du mot de passe",
-      code: err.code
-    }, { status: 500 });
+    console.error("[API-ADMIN-USERS] Erreur PATCH:", err);
+    return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }

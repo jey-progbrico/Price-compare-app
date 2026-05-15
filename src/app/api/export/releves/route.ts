@@ -53,9 +53,9 @@ export async function GET(request: Request) {
     // On récupère tous les profils pour mapper les emails (plus simple et performant sur de petites équipes)
     const { data: allProfiles } = await supabase
       .from("profiles")
-      .select("id, email");
+      .select("id, email, display_name");
     
-    const profileMap = new Map(allProfiles?.map(p => [p.id, p.email]) || []);
+    const profileMap = new Map(allProfiles?.map(p => [p.id, p.display_name || p.email]) || []);
 
     // 3. Enrichissement manuel via le helper centralisé
     const releves = await enrichWithProducts(rawReleves as PriceLog[]);
@@ -71,7 +71,7 @@ export async function GET(request: Request) {
         const prixMagasin = Number(p?.prix_vente || 0);
         const prixConcurrent = Number(rel.prix_constate || 0);
         const ecart = prixConcurrent - prixMagasin;
-        const creatorEmail = rel.created_by ? profileMap.get(rel.created_by) : "N/A";
+        const creatorName = rel.created_by ? profileMap.get(rel.created_by) : "N/A";
 
         return {
           "Date relevé": new Date(rel.created_at).toLocaleDateString("fr-FR"),
@@ -85,7 +85,7 @@ export async function GET(request: Request) {
           "Concurrent": rel.enseigne,
           "Prix concurrent (€)": prixConcurrent,
           "Écart prix (€)": Number(ecart.toFixed(2)),
-          "Créé par": creatorEmail || "N/A",
+          "Créé par": creatorName || "N/A",
           "URL concurrent": rel.url || ""
         };
       });

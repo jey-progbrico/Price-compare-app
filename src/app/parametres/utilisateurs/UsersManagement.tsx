@@ -33,10 +33,16 @@ export default function UsersManagement() {
   const [newPassword, setNewPassword] = useState("");
   const [resetting, setResetting] = useState(false);
 
-  // Form state
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [displayName, setDisplayName] = useState("");
   const [role, setRole] = useState<UserRole>("utilisateur");
+
+  // Edit profile state
+  const [editTarget, setEditTarget] = useState<UserProfile | null>(null);
+  const [editDisplayName, setEditDisplayName] = useState("");
+  const [editRole, setEditRole] = useState<UserRole>("utilisateur");
+  const [updating, setUpdating] = useState(false);
 
   const fetchUsers = async () => {
     setLoading(true);
@@ -66,7 +72,7 @@ export default function UsersManagement() {
       const res = await fetch("/api/admin/users", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password, role }),
+        body: JSON.stringify({ email, password, role, display_name: displayName }),
       });
 
       const data = await res.json();
@@ -75,6 +81,7 @@ export default function UsersManagement() {
         showToast("Utilisateur créé avec succès", "success");
         setEmail("");
         setPassword("");
+        setDisplayName("");
         setRole("utilisateur");
         setShowAddForm(false);
         fetchUsers();
@@ -118,6 +125,37 @@ export default function UsersManagement() {
       showToast("Erreur de connexion au serveur", "error");
     } finally {
       setResetting(false);
+    }
+  };
+
+  const handleUpdateProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editTarget) return;
+
+    setUpdating(true);
+    try {
+      const res = await fetch("/api/admin/users", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ 
+          userId: editTarget.id, 
+          display_name: editDisplayName,
+          role: editRole
+        }),
+      });
+
+      if (res.ok) {
+        showToast("Profil mis à jour", "success");
+        setEditTarget(null);
+        fetchUsers();
+      } else {
+        const data = await res.json();
+        showToast(data.error || "Erreur lors de la mise à jour", "error");
+      }
+    } catch (err) {
+      showToast("Erreur de connexion", "error");
+    } finally {
+      setUpdating(false);
     }
   };
 
@@ -268,12 +306,28 @@ export default function UsersManagement() {
                     <User className="w-6 h-6" />
                   </div>
                   <div>
-                    <div className="text-sm font-bold text-white group-hover:text-red-500 transition-colors">{user.email}</div>
+                    <div className="text-sm font-bold text-white group-hover:text-red-500 transition-colors">
+                      {user.display_name || user.email}
+                    </div>
+                    {user.display_name && (
+                      <div className="text-[10px] text-neutral-500 font-medium">{user.email}</div>
+                    )}
                     <div className="text-[10px] text-neutral-600 mt-0.5 font-medium">Membre depuis {new Date(user.created_at).toLocaleDateString('fr-FR')}</div>
                   </div>
                 </div>
                 <div className="flex items-center justify-between sm:justify-end gap-3 sm:gap-6">
                   {getRoleBadge(user.role)}
+                   <button
+                    onClick={() => {
+                      setEditTarget(user);
+                      setEditDisplayName(user.display_name || "");
+                      setEditRole(user.role);
+                    }}
+                    className="p-2.5 rounded-xl bg-neutral-900 border border-neutral-800 text-neutral-500 hover:text-white hover:border-neutral-600 transition-all active:scale-90"
+                    title="Modifier le profil"
+                  >
+                    <UserCog className="w-4 h-4" />
+                  </button>
                   <button
                     onClick={() => {
                       setResetTarget(user);
@@ -360,6 +414,100 @@ export default function UsersManagement() {
                       className="flex-[2] py-4 rounded-2xl bg-white text-black font-black text-xs uppercase tracking-widest hover:bg-neutral-200 transition-all disabled:opacity-50 flex items-center justify-center gap-2 shadow-xl shadow-white/5"
                     >
                       {resetting ? <Loader2 className="w-4 h-4 animate-spin" /> : <><CheckCircle2 className="w-4 h-4" /> Confirmer</>}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* 5. MODAL EDIT PROFILE */}
+      <AnimatePresence>
+        {editTarget && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setEditTarget(null)}
+              className="absolute inset-0 bg-black/80 backdrop-blur-sm"
+            />
+            
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="relative w-full max-w-lg bg-neutral-900 border border-neutral-800 rounded-[2.5rem] shadow-2xl overflow-hidden"
+            >
+              <div className="p-8 space-y-6">
+                <div className="flex items-center justify-between">
+                  <div className="w-12 h-12 rounded-2xl bg-blue-600/10 border border-blue-600/20 flex items-center justify-center text-blue-500">
+                    <UserCog className="w-6 h-6" />
+                  </div>
+                  <button 
+                    onClick={() => setEditTarget(null)}
+                    className="p-2 rounded-full hover:bg-neutral-800 text-neutral-500 transition-colors"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                <div className="space-y-1">
+                  <h3 className="text-xl font-black text-white">Modifier le profil</h3>
+                  <p className="text-xs text-neutral-500 font-medium">Gestion de <span className="text-neutral-300">{editTarget.email}</span></p>
+                </div>
+
+                <form onSubmit={handleUpdateProfile} className="space-y-6">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-neutral-500 uppercase tracking-widest px-1">Nom d'affichage</label>
+                    <div className="relative group">
+                      <User className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-600 group-focus-within:text-blue-500 transition-colors" />
+                      <input 
+                        type="text" 
+                        value={editDisplayName}
+                        onChange={(e) => setEditDisplayName(e.target.value)}
+                        placeholder="Nom d'affichage"
+                        className="w-full bg-black border border-neutral-800 rounded-2xl pl-11 pr-4 py-4 text-sm text-white focus:border-blue-500 outline-none transition-all"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-3">
+                    <label className="text-[10px] font-black text-neutral-500 uppercase tracking-widest px-1">Rôle</label>
+                    <div className="grid grid-cols-2 gap-3">
+                      {(["admin", "adherant", "manager", "utilisateur"] as UserRole[]).map((r) => (
+                        <button
+                          key={r}
+                          type="button"
+                          onClick={() => setEditRole(r)}
+                          className={`py-3 rounded-xl border text-[10px] font-black uppercase tracking-widest transition-all ${
+                            editRole === r 
+                              ? "bg-blue-600 border-blue-500 text-white" 
+                              : "bg-black border-neutral-800 text-neutral-500"
+                          }`}
+                        >
+                          {r}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="flex gap-3 pt-4">
+                    <button
+                      type="button"
+                      onClick={() => setEditTarget(null)}
+                      className="flex-1 py-4 rounded-2xl bg-neutral-800 text-neutral-400 font-black text-xs uppercase tracking-widest hover:bg-neutral-700 transition-all"
+                    >
+                      Annuler
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={updating}
+                      className="flex-[2] py-4 rounded-2xl bg-blue-600 text-white font-black text-xs uppercase tracking-widest hover:bg-blue-500 transition-all disabled:opacity-50 flex items-center justify-center gap-2 shadow-xl"
+                    >
+                      {updating ? <Loader2 className="w-4 h-4 animate-spin" /> : <><CheckCircle2 className="w-4 h-4" /> Enregistrer</>}
                     </button>
                   </div>
                 </form>

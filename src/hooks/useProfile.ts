@@ -9,6 +9,7 @@ export interface UserProfile {
   id: string;
   email: string;
   role: UserRole;
+  display_name: string | null;
   created_at: string;
 }
 

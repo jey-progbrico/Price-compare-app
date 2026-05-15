@@ -1,4 +1,4 @@
-import { supabase } from "@/lib/supabase";
+import { createClient } from "@/lib/supabase/server";
 import Link from "next/link";
 import { 
   Search, 
@@ -32,6 +32,8 @@ import GlobalSearchBar from "@/components/GlobalSearchBar";
 import DashboardKPIs from "@/components/DashboardKPIs";
 
 export default async function Home() {
+  const supabase = await createClient();
+
   const [
     { count: totalProduits },
     { count: totalReleves },
@@ -41,7 +43,7 @@ export default async function Home() {
     supabase.from("produits").select("*", { count: "exact", head: true }),
     supabase.from("releves_prix").select("*", { count: "exact", head: true }),
     supabase.from("produits").select("rayon").not("rayon", "is", null),
-    supabase.from("historique_activites").select("*").order("created_at", { ascending: false }).limit(8)
+    supabase.from("historique_activites").select("*, profiles(display_name, email)").order("created_at", { ascending: false }).limit(8)
   ]);
 
   const totalRayons = new Set((rawRayons as RayonRow[] | null)?.map(r => r.rayon) || []).size;
@@ -80,11 +82,11 @@ export default async function Home() {
 
       const [{ data: products }, { data: profiles }] = await Promise.all([
         supabase.from("produits").select("numero_ean, prix_vente").in("numero_ean", eans),
-        supabase.from("profiles").select("id, email").in("id", userIds)
+        supabase.from("profiles").select("id, email, display_name").in("id", userIds)
       ]);
 
       const productMap = new Map((products as any[] | null)?.map(p => [p.numero_ean, p.prix_vente]) || []);
-      const profileMap = new Map((profiles as any[] | null)?.map(p => [p.id, p.email]) || []);
+      const profileMap = new Map((profiles as any[] | null)?.map(p => [p.id, p.display_name || p.email]) || []);
 
       kpiData = rawReleves.map((r: PriceLog) => ({
         enseigne: r.enseigne,
@@ -171,7 +173,7 @@ export default async function Home() {
                       {act.type_action.replace(/_/g, ' ')}
                     </p>
                     <p className="text-[10px] font-mono text-neutral-600">
-                      {act.ean ? `EAN: ${act.ean}` : 'Action Système'} • {new Date(act.created_at).toLocaleTimeString()}
+                      {act.ean ? `EAN: ${act.ean}` : 'Action Système'} • {act.profiles?.display_name || act.profiles?.email || 'Système'} • {new Date(act.created_at).toLocaleTimeString()}
                     </p>
                   </div>
                 </div>
@@ -289,7 +291,7 @@ export default async function Home() {
                       {act.type_action.replace(/_/g, ' ')}
                     </p>
                     <p className="text-[8px] font-black text-neutral-600 uppercase tracking-widest">
-                      {new Date(act.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} • {act.ean || 'Système'}
+                      {new Date(act.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} • {act.ean || 'Système'} • {act.profiles?.display_name || act.profiles?.email || 'Système'}
                     </p>
                   </div>
                   <ChevronRight className="w-3 h-3 text-neutral-800" />
