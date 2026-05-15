@@ -48,9 +48,14 @@ ADD CONSTRAINT releves_prix_created_by_fkey
 FOREIGN KEY (created_by) REFERENCES public.profiles(id);
 
 
--- 4. Table historique_consultations : Accessibilité
-ALTER TABLE public.historique_consultations ENABLE ROW LEVEL SECURITY;
-
-DROP POLICY IF EXISTS "Authenticated users can view all consultations" ON public.historique_consultations;
-CREATE POLICY "Authenticated users can view all consultations" 
-ON public.historique_consultations FOR SELECT TO authenticated USING (true);
+-- 4. Table historique_consultations : Accessibilité (Conditionnel)
+DO $$ 
+BEGIN
+    IF EXISTS (SELECT FROM pg_tables WHERE schemaname = 'public' AND tablename = 'historique_consultations') THEN
+        ALTER TABLE public.historique_consultations ENABLE ROW LEVEL SECURITY;
+        
+        DROP POLICY IF EXISTS "Authenticated users can view all consultations" ON public.historique_consultations;
+        CREATE POLICY "Authenticated users can view all consultations" 
+        ON public.historique_consultations FOR SELECT TO authenticated USING (true);
+    END IF;
+END $$;
