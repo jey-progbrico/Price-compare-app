@@ -358,6 +358,7 @@ function ManualVeilleCard({ res, index, ean, internalPrice, releveId, onDelete, 
             <input
               type="number"
               step="0.01"
+              inputMode="decimal"
               placeholder="Prix..."
               value={prix}
               onChange={(e) => setPrix(e.target.value)}
