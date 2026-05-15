@@ -19,10 +19,11 @@ import {
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import { supabase } from "@/lib/supabase";
+import { createClient } from "@/lib/supabase/client";
 import { RayonRow } from "@/types/database";
 
 export default function BarcodeScanner({ onClose }: { onClose: () => void }) {
+  const supabase = createClient();
   const router = useRouter();
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
