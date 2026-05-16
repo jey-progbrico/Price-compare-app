@@ -37,7 +37,7 @@ import { RayonRow } from "@/types/database";
 export default function ParametresPage() {
   const router = useRouter();
   const supabase = createClient();
-  const { profile, loading: profileLoading, isAdmin, isAdherant, isManager, isStandardUser } = useProfile();
+  const { profile, loading: profileLoading, isAdmin, isAdherant, isPlatformAdmin, isStandardUser, canManageUsers, canAccessAdmin } = useProfile();
   const canImport = isAdmin || isAdherant;
   const canExport = true; // Tout le monde peut exporter (ses propres données ou tout)
   const canMaintain = isAdmin || isAdherant; // Outils de maintenance réservés Admin/Adh
@@ -393,7 +393,7 @@ export default function ParametresPage() {
         </section>
       )}
 
-      {isAdmin && (
+      {canManageUsers && (
         <section className="space-y-3">
           <div className="flex items-center gap-2 px-1">
             <Shield className="w-4 h-4 text-red-500" />

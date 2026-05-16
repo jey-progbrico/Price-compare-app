@@ -14,14 +14,16 @@ export default async function AdminUsersPage() {
     redirect("/login");
   }
 
-  // Vérification de sécurité côté serveur (Admin seulement)
+  // Vérification de sécurité côté serveur (Admin/Adhérent/Platform Admin)
   const { data: profile } = await supabase
     .from("profiles")
     .select("role")
     .eq("id", user.id)
     .single();
 
-  if (profile?.role !== "admin") {
+  const isAuthorized = ["admin", "platform_admin", "adherant"].includes(profile?.role || "");
+
+  if (!isAuthorized) {
     redirect("/parametres");
   }
 

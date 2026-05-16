@@ -31,19 +31,30 @@ export async function GET(request: NextRequest) {
   // Vérifier le rôle de l'appelant
   const { data: callerProfile } = await supabase
     .from("profiles")
-    .select("role")
+    .select("role, store_id")
     .eq("id", user.id)
     .single();
 
-  if (callerProfile?.role !== "admin") {
+  const isPlatformAdmin = callerProfile?.role === "platform_admin";
+  const isLocalAdmin = callerProfile?.role === "admin";
+  const isAdherant = callerProfile?.role === "adherant";
+
+  if (!isPlatformAdmin && !isLocalAdmin && !isAdherant) {
     return NextResponse.json({ error: "Accès refusé" }, { status: 403 });
   }
 
   try {
-    const { data: profiles, error } = await supabase
+    let query = supabase
       .from("profiles")
       .select("*")
       .order("created_at", { ascending: false });
+
+    // ISOLATION SAAS : Les admins locaux et adhérents ne voient que leur store
+    if (!isPlatformAdmin && callerProfile?.store_id) {
+      query = query.eq("store_id", callerProfile.store_id);
+    }
+
+    const { data: profiles, error } = await query;
 
     if (error) throw error;
 
@@ -68,11 +79,15 @@ export async function POST(request: NextRequest) {
   // Vérifier le rôle de l'appelant
   const { data: callerProfile } = await supabase
     .from("profiles")
-    .select("role")
+    .select("role, store_id")
     .eq("id", caller.id)
     .single();
 
-  if (callerProfile?.role !== "admin") {
+  const isPlatformAdmin = callerProfile?.role === "platform_admin";
+  const isLocalAdmin = callerProfile?.role === "admin";
+  const isAdherant = callerProfile?.role === "adherant";
+
+  if (!isPlatformAdmin && !isLocalAdmin && !isAdherant) {
     return NextResponse.json({ error: "Accès refusé" }, { status: 403 });
   }
 
@@ -85,10 +100,19 @@ export async function POST(request: NextRequest) {
     }
 
     // Validation des rôles autorisés
-    const validRoles = ["admin", "adherant", "manager", "utilisateur"];
+    const validRoles = ["admin", "adherant", "manager", "utilisateur", "platform_admin"];
     if (!validRoles.includes(role)) {
       return NextResponse.json({ error: "Rôle invalide" }, { status: 400 });
     }
+
+    // Sécurité : Seul un Platform Admin peut créer un autre Platform Admin
+    if (role === "platform_admin" && !isPlatformAdmin) {
+      return NextResponse.json({ error: "Droits insuffisants pour créer un administrateur plateforme" }, { status: 403 });
+    }
+
+    // ISOLATION SAAS : Le nouvel utilisateur hérite du store_id du créateur
+    // Sauf si le créateur est platform_admin (il peut choisir, ou on met null par défaut)
+    const store_id = isPlatformAdmin ? (body.store_id || null) : callerProfile?.store_id;
 
     // 1. Créer l'utilisateur dans auth.users via l'API Admin
     console.log("[API-ADMIN-USERS] Étape 1: Création auth.user pour:", email);
@@ -96,7 +120,7 @@ export async function POST(request: NextRequest) {
       email,
       password,
       email_confirm: true,
-      user_metadata: { role, display_name: body.display_name }
+      user_metadata: { role, display_name: body.display_name, store_id }
     });
 
     if (createError) {
@@ -129,7 +153,8 @@ export async function POST(request: NextRequest) {
             id: newUser.user.id,
             email: email,
             role: role,
-            display_name: body.display_name || null
+            display_name: body.display_name || null,
+            store_id: store_id
           }
         ]);
       
@@ -180,11 +205,15 @@ export async function PATCH(request: NextRequest) {
 
   const { data: callerProfile } = await supabase
     .from("profiles")
-    .select("role")
+    .select("role, store_id")
     .eq("id", caller.id)
     .single();
 
-  if (callerProfile?.role !== "admin") {
+  const isPlatformAdmin = callerProfile?.role === "platform_admin";
+  const isLocalAdmin = callerProfile?.role === "admin";
+  const isAdherant = callerProfile?.role === "adherant";
+
+  if (!isPlatformAdmin && !isLocalAdmin && !isAdherant) {
     return NextResponse.json({ error: "Accès refusé" }, { status: 403 });
   }
 
@@ -194,6 +223,19 @@ export async function PATCH(request: NextRequest) {
 
     if (!userId) {
       return NextResponse.json({ error: "ID utilisateur manquant" }, { status: 400 });
+    }
+
+    // ISOLATION SAAS : Vérifier que la cible appartient au même store (sauf si platform_admin)
+    if (!isPlatformAdmin) {
+      const { data: targetProfile } = await supabaseAdmin
+        .from("profiles")
+        .select("store_id")
+        .eq("id", userId)
+        .single();
+      
+      if (targetProfile?.store_id !== callerProfile?.store_id) {
+        return NextResponse.json({ error: "Interdit : cet utilisateur n'appartient pas à votre périmètre" }, { status: 403 });
+      }
     }
 
     // 1. Mise à jour auth.users si password ou metadata changent

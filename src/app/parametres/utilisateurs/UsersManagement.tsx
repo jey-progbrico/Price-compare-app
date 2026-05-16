@@ -19,10 +19,11 @@ import {
   X
 } from "lucide-react";
 import { showToast } from "@/components/Toast";
-import { UserProfile, UserRole } from "@/hooks/useProfile";
+import { useProfile, UserProfile, UserRole } from "@/hooks/useProfile";
 import { motion, AnimatePresence } from "framer-motion";
 
 export default function UsersManagement() {
+  const { profile, isPlatformAdmin, canManageUsers, loading: profileLoading } = useProfile();
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
@@ -161,6 +162,7 @@ export default function UsersManagement() {
 
   const getRoleBadge = (role: UserRole) => {
     const configs: Record<UserRole, { label: string; color: string; icon: any }> = {
+      platform_admin: { label: "Super-Admin", color: "text-purple-500 bg-purple-500/10 border-purple-500/20", icon: ShieldCheck },
       admin: { label: "Administrateur", color: "text-red-500 bg-red-500/10 border-red-500/20", icon: ShieldCheck },
       adherant: { label: "Adhérent", color: "text-emerald-500 bg-emerald-500/10 border-emerald-500/20", icon: UserCheck },
       manager: { label: "Manager", color: "text-blue-500 bg-blue-500/10 border-blue-500/20", icon: UserCog },
@@ -177,6 +179,21 @@ export default function UsersManagement() {
       </div>
     );
   };
+
+  if (profileLoading) return null;
+  if (!canManageUsers) {
+    return (
+      <div className="p-12 flex flex-col items-center justify-center text-center space-y-6">
+        <div className="w-20 h-20 rounded-[2rem] bg-red-600/10 flex items-center justify-center border border-red-500/20">
+          <Shield className="w-10 h-10 text-red-500" />
+        </div>
+        <div className="max-w-xs">
+          <h2 className="text-xl font-black text-white uppercase tracking-[0.2em] mb-2">Accès Refusé</h2>
+          <p className="text-xs font-bold text-neutral-500 uppercase tracking-widest">Vous n'avez pas les permissions nécessaires pour gérer les utilisateurs.</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
@@ -240,8 +257,10 @@ export default function UsersManagement() {
 
             <div className="space-y-3">
               <label className="text-[10px] font-black text-neutral-500 uppercase tracking-widest px-1">Rôle & Permissions</label>
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-                {(["admin", "adherant", "manager", "utilisateur"] as UserRole[]).map((r) => (
+              <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+                {(["platform_admin", "admin", "adherant", "manager", "utilisateur"] as UserRole[])
+                  .filter(r => r !== "platform_admin" || isPlatformAdmin)
+                  .map((r) => (
                   <button
                     key={r}
                     type="button"
@@ -252,15 +271,16 @@ export default function UsersManagement() {
                         : "bg-black border-neutral-800 text-neutral-500 hover:border-neutral-700"
                     }`}
                   >
-                    {r}
+                    {r === "platform_admin" ? "Super-Admin" : r}
                   </button>
                 ))}
               </div>
               <p className="text-[9px] text-neutral-600 px-1 italic">
-                {role === "admin" && "• Accès complet, gestion des utilisateurs et outils critiques."}
-                {role === "adherant" && "• Accès total aux relevés et purges, sans gestion utilisateur."}
-                {role === "manager" && "• Accès aux relevés de son périmètre et exports avancés."}
-                {role === "utilisateur" && "• Accès limité à ses propres relevés et à la veille terrain."}
+                {role === "platform_admin" && "• Accès total plateforme, gestion transverse de tous les magasins."}
+                {role === "admin" && "• Accès complet magasin, gestion des utilisateurs et outils critiques."}
+                {role === "adherant" && "• Accès total magasin, sans gestion des administrateurs."}
+                {role === "manager" && "• Accès métier terrain avancé sur son magasin."}
+                {role === "utilisateur" && "• Accès terrain standard pour les relevés de prix."}
               </p>
             </div>
 
@@ -477,7 +497,9 @@ export default function UsersManagement() {
                   <div className="space-y-3">
                     <label className="text-[10px] font-black text-neutral-500 uppercase tracking-widest px-1">Rôle</label>
                     <div className="grid grid-cols-2 gap-3">
-                      {(["admin", "adherant", "manager", "utilisateur"] as UserRole[]).map((r) => (
+                      {(["platform_admin", "admin", "adherant", "manager", "utilisateur"] as UserRole[])
+                        .filter(r => r !== "platform_admin" || isPlatformAdmin)
+                        .map((r) => (
                         <button
                           key={r}
                           type="button"
@@ -488,7 +510,7 @@ export default function UsersManagement() {
                               : "bg-black border-neutral-800 text-neutral-500"
                           }`}
                         >
-                          {r}
+                          {r === "platform_admin" ? "Super-Admin" : r}
                         </button>
                       ))}
                     </div>

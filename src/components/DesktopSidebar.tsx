@@ -11,8 +11,6 @@ import {
   Activity, 
   FileSpreadsheet, 
   Settings, 
-  Search,
-  ScanLine,
   Zap,
   MessageSquare
 } from "lucide-react";
@@ -21,12 +19,12 @@ import { useProfile } from "@/hooks/useProfile";
 
 export default function DesktopSidebar() {
   const pathname = usePathname();
-  const { isAdmin, isAdherant } = useProfile();
+  const { profile, canAccessAdmin, canManageStore } = useProfile();
   const [unreadCount, setUnreadCount] = useState(0);
   const supabase = createClient();
 
   useEffect(() => {
-    if (!isAdmin) return;
+    if (!canAccessAdmin) return;
 
     const fetchUnread = async () => {
       const { data, error } = await supabase
@@ -62,7 +60,7 @@ export default function DesktopSidebar() {
         supabase.removeChannel(channel);
       }
     };
-  }, [isAdmin, supabase]);
+  }, [canAccessAdmin, supabase]);
 
   const baseMenu = [
     { href: "/", label: "Dashboard", icon: LayoutDashboard },
@@ -76,7 +74,7 @@ export default function DesktopSidebar() {
     { href: "/support", label: "Support Admin", icon: MessageSquare },
   ];
 
-  const adherantMenu = [
+  const storeManagerMenu = [
     { href: "/import-produits", label: "Import Excel", icon: FileSpreadsheet },
   ];
 
@@ -84,13 +82,13 @@ export default function DesktopSidebar() {
     { href: "/parametres", label: "Paramètres", icon: Settings },
   ];
 
-  // Construction dynamique du menu selon le rôle
+  // Construction dynamique du menu selon les capacités
   let displayItems = [...baseMenu];
   
-  if (isAdmin) {
+  if (canAccessAdmin) {
     displayItems = [...displayItems, ...adminMenu];
-  } else if (isAdherant) {
-    displayItems = [...displayItems, ...adherantMenu];
+  } else if (canManageStore) {
+    displayItems = [...displayItems, ...storeManagerMenu];
   }
 
   displayItems = [...displayItems, ...settingsMenu];

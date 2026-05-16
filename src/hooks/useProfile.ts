@@ -3,13 +3,14 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 
-export type UserRole = "admin" | "adherant" | "manager" | "utilisateur";
+export type UserRole = "admin" | "adherant" | "manager" | "utilisateur" | "platform_admin";
 
 export interface UserProfile {
   id: string;
   email: string;
   role: UserRole;
   display_name: string | null;
+  store_id: string | null;
   created_at: string;
 }
 
@@ -49,17 +50,32 @@ export function useProfile() {
     fetchProfile();
   }, [supabase]);
 
-  const isAdmin = profile?.role === "admin";
+  // Helpers de Rôles (Compatibilité historique)
+  const isPlatformAdmin = profile?.role === "platform_admin";
+  const isAdmin = profile?.role === "admin" || isPlatformAdmin; // On inclut le super-admin dans isAdmin pour ne rien casser
   const isAdherant = profile?.role === "adherant";
   const isManager = profile?.role === "manager";
   const isStandardUser = profile?.role === "utilisateur";
 
+  // Helpers de Capacités (Logique VigiSuite)
+  const canAccessAdmin = isAdmin || isPlatformAdmin;
+  const canManageStore = isAdmin || isAdherant || isPlatformAdmin;
+  const canManageUsers = isAdherant || isPlatformAdmin;
+  const canAccessSaaS = isPlatformAdmin;
+
   return {
     profile,
+    // Rôles
     isAdmin,
+    isPlatformAdmin,
     isAdherant,
     isManager,
     isStandardUser,
+    // Capacités
+    canAccessAdmin,
+    canManageStore,
+    canManageUsers,
+    canAccessSaaS,
     loading,
     error,
     refresh: async () => {

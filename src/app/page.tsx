@@ -60,12 +60,13 @@ export default async function Home() {
     profile = profileData;
   }
 
-  const isAdmin = profile?.role === 'admin';
+  const isPlatformAdmin = profile?.role === 'platform_admin';
+  const isAdmin = profile?.role === 'admin' || isPlatformAdmin;
   const isAdherant = profile?.role === 'adherant';
   const isManager = profile?.role === 'manager';
   const canImport = isAdmin || isAdherant;
   const canExport = isAdmin || isAdherant || isManager;
-  const isManagement = isAdmin || isAdherant || isManager;
+  const isManagement = isAdmin || isAdherant || isManager || isPlatformAdmin;
 
   // 4. Données pour le Dashboard KPI (Management uniquement)
   let kpiData: any[] = [];

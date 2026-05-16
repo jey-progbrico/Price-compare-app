@@ -16,6 +16,7 @@ import {
 import { motion, AnimatePresence } from "framer-motion";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
+import { useProfile } from "@/hooks/useProfile";
 import { RayonRow, Product } from "@/types/database";
 
 interface Props {
@@ -28,6 +29,7 @@ interface Props {
 export default function CreateProductModal({ isOpen, onClose, initialRayon, onSuccess }: Props) {
   const supabase = createClient();
   const router = useRouter();
+  const { profile } = useProfile();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [rayons, setRayons] = useState<string[]>([]);
@@ -78,6 +80,7 @@ export default function CreateProductModal({ isOpen, onClose, initialRayon, onSu
         groupe_produit: formData.groupe_produit,
         prix_vente: parseFloat(formData.prix_vente) || 0,
         code_interne: formData.code_interne || null,
+        store_id: profile?.store_id,
         updated_at: new Date().toISOString()
       }]).select().single();
 

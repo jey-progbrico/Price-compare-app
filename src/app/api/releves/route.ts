@@ -61,6 +61,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Données manquantes" }, { status: 400 });
     }
 
+    // Récupérer le profil pour avoir le store_id
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("store_id")
+      .eq("id", user.id)
+      .single();
+
     const { data, error } = await supabase
       .from("releves_prix")
       .insert([
@@ -72,7 +79,8 @@ export async function POST(request: NextRequest) {
           designation_originale,
           designation_normalisee,
           match_type,
-          created_by: user.id
+          created_by: user.id,
+          store_id: profile?.store_id
         },
       ])
       .select();
@@ -109,8 +117,8 @@ export async function DELETE(request: NextRequest) {
     .eq("id", user.id)
     .single();
 
-  if (profile?.role === "utilisateur") {
-    return NextResponse.json({ error: "Permission refusée : les utilisateurs ne peuvent pas supprimer de relevés." }, { status: 403 });
+  if (profile?.role === "utilisateur" || profile?.role === "manager") {
+    return NextResponse.json({ error: "Permission refusée : accès réservé aux administrateurs." }, { status: 403 });
   }
 
   const { searchParams } = new URL(request.url);
