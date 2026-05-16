@@ -33,13 +33,54 @@ import DashboardKPIs from "@/components/DashboardKPIs";
 
 export default async function Home() {
   const supabase = await createClient();
+  
+  // 1. Récupérer l'utilisateur et son profil complet
+  const { data: { user } } = await supabase.auth.getUser();
+  
+  let profile = null;
+  if (user?.id) {
+    const { data: profileData } = await supabase
+      .from("profiles")
+      .select("role, store_id")
+      .eq("id", user.id)
+      .single();
+    profile = profileData;
+  }
+
+  const isPlatformAdmin = profile?.role === 'platform_admin';
+  const storeId = isPlatformAdmin ? null : profile?.store_id;
+
+  // 2. Requêtes parallélisées et isolées par store
+  let statsQuery = supabase.rpc("get_dashboard_stats", { p_store_id: storeId });
+  
+  let activitiesQuery = supabase.from("historique_activites")
+    .select("*, profiles(display_name, email)")
+    .order("created_at", { ascending: false })
+    .limit(8);
+
+  let relevesQuery = supabase.from("releves_prix")
+    .select("enseigne, prix_constate, created_by, ean");
+
+  let supportQuery = supabase.from("support_conversations")
+    .select("unread_count_admin, unread_count_user");
+
+  // Appliquer le filtre store_id uniquement si on n'est pas platform_admin
+  if (!isPlatformAdmin && storeId) {
+    activitiesQuery = activitiesQuery.eq("store_id", storeId);
+    relevesQuery = relevesQuery.eq("store_id", storeId);
+    supportQuery = supportQuery.eq("store_id", storeId);
+  }
 
   const [
     { data: stats },
-    { data: activities }
+    { data: activities },
+    { data: rawReleves },
+    { data: convs }
   ] = await Promise.all([
-    supabase.rpc("get_dashboard_stats"),
-    supabase.from("historique_activites").select("*, profiles(display_name, email)").order("created_at", { ascending: false }).limit(8)
+    statsQuery,
+    activitiesQuery,
+    relevesQuery,
+    supportQuery
   ]);
 
   const totalProduits = stats?.total_produits || 0;
@@ -47,20 +88,6 @@ export default async function Home() {
   const totalRayons = stats?.total_rayons || 0;
   const typedActivities = (activities as ActivityRow[] | null) || [];
 
-  // 3. Récupérer le rôle de l'utilisateur
-  const { data: { user } } = await supabase.auth.getUser();
-  
-  let profile = null;
-  if (user?.id) {
-    const { data: profileData } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", user.id)
-      .single();
-    profile = profileData;
-  }
-
-  const isPlatformAdmin = profile?.role === 'platform_admin';
   const isAdmin = profile?.role === 'admin' || isPlatformAdmin;
   const isAdherant = profile?.role === 'adherant';
   const isManager = profile?.role === 'manager';
@@ -68,45 +95,43 @@ export default async function Home() {
   const canExport = isAdmin || isAdherant || isManager;
   const isManagement = isAdmin || isAdherant || isManager || isPlatformAdmin;
 
-  // 4. Données pour le Dashboard KPI (Management uniquement)
+  // 3. Calcul des KPIs (si Management)
   let kpiData: any[] = [];
-  if (isManagement) {
-    const { data: rawReleves } = await supabase
-      .from("releves_prix")
-      .select("enseigne, prix_constate, created_by, ean") as { data: PriceLog[] | null };
-    
-    if (rawReleves && rawReleves.length > 0) {
-      const eans = Array.from(new Set(rawReleves.map(r => r.ean).filter(ean => !!ean)));
-      const userIds = Array.from(new Set(rawReleves.map(r => r.created_by).filter(id => !!id)));
+  if (isManagement && rawReleves && rawReleves.length > 0) {
+    const eans = Array.from(new Set(rawReleves.map(r => r.ean).filter(ean => !!ean)));
+    const userIds = Array.from(new Set(rawReleves.map(r => r.created_by).filter(id => !!id)));
 
-      // Utilisation d'un client admin pour les KPIs afin de garantir l'accès aux noms d'affichage pour le management
-      const { createClient: createSupabaseAdmin } = await import("@supabase/supabase-js");
-      const supabaseAdmin = createSupabaseAdmin(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.SUPABASE_SERVICE_ROLE_KEY!
-      );
+    const { createClient: createSupabaseAdmin } = await import("@supabase/supabase-js");
+    const supabaseAdmin = createSupabaseAdmin(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    );
 
-      const [{ data: products }, { data: profiles }] = await Promise.all([
-        supabase.from("produits").select("numero_ean, prix_vente").in("numero_ean", eans),
-        supabaseAdmin.from("profiles").select("id, email, display_name").in("id", userIds)
-      ]);
+    let productsQuery = supabase.from("produits")
+      .select("numero_ean, prix_vente")
+      .in("numero_ean", eans);
 
-      const productMap = new Map((products as any[] | null)?.map(p => [p.numero_ean, p.prix_vente]) || []);
-      const profileMap = new Map((profiles as any[] | null)?.map(p => [p.id, p.display_name || p.email]) || []);
-
-      kpiData = rawReleves.map((r: PriceLog) => ({
-        enseigne: r.enseigne,
-        prix_constate: r.prix_constate,
-        prix_vente: productMap.get(r.ean) || null,
-        user_email: profileMap.get(r.created_by || "") || (r.created_by ? "Utilisateur" : "Système")
-      }));
+    if (!isPlatformAdmin && storeId) {
+      productsQuery = productsQuery.eq("store_id", storeId);
     }
-  }
 
-  // 4. Alertes Support (pour badge mobile)
-  const { data: convs } = await supabase
-    .from("support_conversations")
-    .select("unread_count_admin, unread_count_user");
+    const [{ data: products }, { data: profiles }] = await Promise.all([
+      productsQuery,
+      supabaseAdmin.from("profiles")
+        .select("id, email, display_name")
+        .in("id", userIds)
+    ]);
+
+    const productMap = new Map((products as any[] | null)?.map(p => [p.numero_ean, p.prix_vente]) || []);
+    const profileMap = new Map((profiles as any[] | null)?.map(p => [p.id, p.display_name || p.email]) || []);
+
+    kpiData = (rawReleves as PriceLog[]).map((r: PriceLog) => ({
+      enseigne: r.enseigne,
+      prix_constate: r.prix_constate,
+      prix_vente: productMap.get(r.ean) || null,
+      user_email: profileMap.get(r.created_by || "") || (r.created_by ? "Utilisateur" : "Système")
+    }));
+  }
   
   const unreadCount = (convs as { unread_count_admin: number; unread_count_user: number; }[] | null)?.reduce((acc, c) => acc + (c.unread_count_admin || 0) + (c.unread_count_user || 0), 0) || 0;
 

@@ -15,11 +15,13 @@ export async function GET(request: Request) {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("role")
+    .select("role, store_id")
     .eq("id", user.id)
     .single();
 
+  const isPlatformAdmin = profile?.role === "platform_admin";
   const isStandardUser = profile?.role === "utilisateur";
+  const storeId = profile?.store_id;
 
   const { searchParams } = new URL(request.url);
   const dateStart = searchParams.get("dateStart");
@@ -37,6 +39,11 @@ export async function GET(request: Request) {
     // Sécurité par rôle : l'utilisateur standard ne voit que ses relevés
     if (isStandardUser) {
       relQuery = relQuery.eq("created_by", user.id);
+    }
+
+    // Isolation SaaS : Filtrage par store (sauf Platform Admin)
+    if (!isPlatformAdmin && storeId) {
+      relQuery = relQuery.eq("store_id", storeId);
     }
 
     if (dateStart) relQuery = relQuery.gte("created_at", `${dateStart}T00:00:00`);
