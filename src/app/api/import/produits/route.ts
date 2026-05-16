@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase";
+import { createClient } from "@/lib/supabase/server";
 import { getServerProfile } from "@/lib/auth-utils";
 import * as XLSX from "xlsx";
 
@@ -16,6 +16,7 @@ interface RawRow {
 }
 
 export async function POST(request: Request) {
+  const supabase = await createClient();
   try {
     const formData = await request.formData();
     const file = formData.get("file") as File;
