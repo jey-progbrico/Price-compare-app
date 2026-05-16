@@ -23,7 +23,7 @@ import { SupportConversation, SupportMessage } from "@/types/support";
 import { Profile } from "@/types/database";
 
 export default function AdminSupportPage() {
-  const { profile, isAdmin, loading: profileLoading } = useProfile();
+  const { profile, canManageStore, loading: profileLoading } = useProfile();
   const [conversations, setConversations] = useState<SupportConversation[]>([]);
   const [selectedConv, setSelectedConv] = useState<SupportConversation | null>(null);
   const [messages, setMessages] = useState<SupportMessage[]>([]);
@@ -38,7 +38,7 @@ export default function AdminSupportPage() {
 
   // 1. Charger toutes les conversations
   useEffect(() => {
-    if (!isAdmin) return;
+    if (!canManageStore) return;
 
     const fetchConversations = async () => {
       setLoading(true);
@@ -92,11 +92,11 @@ export default function AdminSupportPage() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [isAdmin, supabase]);
+  }, [canManageStore, supabase]);
 
   // 2. Charger les messages d'une conversation
   useEffect(() => {
-    if (!selectedConv || !isAdmin) return;
+    if (!selectedConv || !canManageStore) return;
 
     const fetchMessages = async () => {
       const { data, error } = await supabase
@@ -161,7 +161,7 @@ export default function AdminSupportPage() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [selectedConv?.id, isAdmin, supabase]);
+  }, [selectedConv?.id, canManageStore, supabase]);
 
   // 3. Scroll
   useEffect(() => {
@@ -205,7 +205,7 @@ export default function AdminSupportPage() {
   };
 
   if (profileLoading) return null;
-  if (!isAdmin) {
+  if (!canManageStore) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center p-8 text-center space-y-4">
         <AlertCircle className="w-16 h-16 text-red-500 opacity-20" />

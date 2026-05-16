@@ -94,6 +94,7 @@ export default async function Home() {
   const canImport = isAdmin || isAdherant;
   const canExport = isAdmin || isAdherant || isManager;
   const isManagement = isAdmin || isAdherant || isManager || isPlatformAdmin;
+  const canManageStore = isAdmin || isAdherant || isPlatformAdmin;
 
   // 3. Calcul des KPIs (si Management)
   let kpiData: any[] = [];
@@ -299,10 +300,10 @@ export default async function Home() {
                 sub={canImport ? "Import Excel" : "Produit rapide"} 
               />
               <MobileActionBtn 
-                href={isAdmin ? "/support" : "/parametres"} 
+                href={canManageStore ? "/support" : "/parametres"} 
                 icon={<Activity className="w-6 h-6 text-neutral-400" />} 
-                label={isAdmin ? "Support" : "Session"} 
-                sub={isAdmin ? "Dashboard" : "Mon compte"} 
+                label={canManageStore ? "Support" : "Session"} 
+                sub={canManageStore ? "Dashboard" : "Mon compte"} 
               />
             </div>
           </section>

@@ -24,7 +24,7 @@ export default function DesktopSidebar() {
   const supabase = createClient();
 
   useEffect(() => {
-    if (!canAccessAdmin) return;
+    if (!canManageStore) return;
 
     const fetchUnread = async () => {
       const { data, error } = await supabase
@@ -60,7 +60,7 @@ export default function DesktopSidebar() {
         supabase.removeChannel(channel);
       }
     };
-  }, [canAccessAdmin, supabase]);
+  }, [canManageStore, supabase]);
 
   const baseMenu = [
     { href: "/", label: "Dashboard", icon: LayoutDashboard },
@@ -76,6 +76,7 @@ export default function DesktopSidebar() {
 
   const storeManagerMenu = [
     { href: "/import-produits", label: "Import Excel", icon: FileSpreadsheet },
+    { href: "/support", label: "Support", icon: MessageSquare },
   ];
 
   const settingsMenu = [
