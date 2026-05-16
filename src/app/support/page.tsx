@@ -337,25 +337,40 @@ export default function AdminSupportPage() {
               ref={scrollRef}
               className="flex-1 overflow-y-auto p-8 space-y-6 bg-gradient-to-b from-[#0a0a0c] to-black scrollbar-hide"
             >
-              {messages.map((msg) => (
-                <div 
-                  key={msg.id}
-                  className={`flex ${msg.is_admin ? "justify-end" : "justify-start"}`}
-                >
-                  <div className="max-w-[70%] space-y-1.5">
-                    <div className={`p-4 rounded-3xl text-sm font-medium leading-relaxed shadow-xl ${
-                      msg.is_admin 
-                        ? "bg-red-600 text-white rounded-tr-none shadow-red-600/10" 
-                        : "bg-neutral-900 text-neutral-300 rounded-tl-none border border-neutral-800/50"
-                    }`}>
-                      {msg.message}
+              {messages.map((msg) => {
+                if (msg.is_system) {
+                  return (
+                    <div key={msg.id} className="flex justify-center my-6">
+                      <div className="bg-neutral-900/40 border border-neutral-800/50 px-6 py-2.5 rounded-2xl text-xs font-bold text-neutral-500 uppercase tracking-widest text-center shadow-sm">
+                        {msg.message}
+                        <div className="text-[9px] font-black opacity-30 mt-1">
+                          {format(new Date(msg.created_at), "dd MMM yyyy • HH:mm", { locale: fr })}
+                        </div>
+                      </div>
                     </div>
-                    <div className={`text-[8px] uppercase font-black tracking-widest opacity-40 px-2 ${msg.is_admin ? "text-right" : "text-left"}`}>
-                      {format(new Date(msg.created_at), "HH:mm", { locale: fr })}
+                  );
+                }
+
+                return (
+                  <div 
+                    key={msg.id}
+                    className={`flex ${msg.is_admin ? "justify-end" : "justify-start"}`}
+                  >
+                    <div className="max-w-[70%] space-y-1.5">
+                      <div className={`p-4 rounded-3xl text-sm font-medium leading-relaxed shadow-xl ${
+                        msg.is_admin 
+                          ? "bg-red-600 text-white rounded-tr-none shadow-red-600/10" 
+                          : "bg-neutral-900 text-neutral-300 rounded-tl-none border border-neutral-800/50"
+                      }`}>
+                        {msg.message}
+                      </div>
+                      <div className={`text-[8px] uppercase font-black tracking-widest opacity-40 px-2 ${msg.is_admin ? "text-right" : "text-left"}`}>
+                        {format(new Date(msg.created_at), "HH:mm", { locale: fr })}
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
 
             {/* Input Area */}

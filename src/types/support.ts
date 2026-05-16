@@ -19,4 +19,6 @@ export interface SupportMessage {
   message: string;
   created_at: string;
   is_admin: boolean;
+  is_system?: boolean;
+  system_type?: string | null;
 }

@@ -233,23 +233,38 @@ export default function SupportBubble() {
                   <p className="text-xs font-bold uppercase tracking-widest">Besoin d'aide ?<br/>Envoyez-nous un message.</p>
                 </div>
               ) : (
-                messages.map((msg) => (
-                  <div 
-                    key={msg.id}
-                    className={`flex ${msg.is_admin ? "justify-start" : "justify-end"}`}
-                  >
-                    <div className={`max-w-[80%] p-3.5 rounded-2xl text-xs font-medium leading-relaxed ${
-                      msg.is_admin 
-                        ? "bg-neutral-900 text-neutral-300 rounded-tl-none border border-neutral-800/50" 
-                        : "bg-red-600 text-white rounded-tr-none shadow-lg shadow-red-600/10"
-                    }`}>
-                      {msg.message}
-                      <div className={`text-[8px] mt-1.5 uppercase font-black tracking-widest opacity-50 ${msg.is_admin ? "text-neutral-500" : "text-red-100"}`}>
-                        {format(new Date(msg.created_at), "HH:mm", { locale: fr })}
+                messages.map((msg) => {
+                  if (msg.is_system) {
+                    return (
+                      <div key={msg.id} className="flex justify-center my-4">
+                        <div className="bg-neutral-900/50 border border-neutral-800/50 px-4 py-2 rounded-2xl text-[10px] font-bold text-neutral-400 text-center max-w-[85%] shadow-sm">
+                          {msg.message}
+                          <div className="text-[8px] font-black opacity-30 mt-1 uppercase tracking-widest">
+                            {format(new Date(msg.created_at), "HH:mm", { locale: fr })}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <div 
+                      key={msg.id}
+                      className={`flex ${msg.is_admin ? "justify-start" : "justify-end"}`}
+                    >
+                      <div className={`max-w-[80%] p-3.5 rounded-2xl text-xs font-medium leading-relaxed ${
+                        msg.is_admin 
+                          ? "bg-neutral-900 text-neutral-300 rounded-tl-none border border-neutral-800/50" 
+                          : "bg-red-600 text-white rounded-tr-none shadow-lg shadow-red-600/10"
+                      }`}>
+                        {msg.message}
+                        <div className={`text-[8px] mt-1.5 uppercase font-black tracking-widest opacity-50 ${msg.is_admin ? "text-neutral-500" : "text-red-100"}`}>
+                          {format(new Date(msg.created_at), "HH:mm", { locale: fr })}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))
+                  );
+                })
               )}
             </div>
 
