@@ -11,11 +11,11 @@ export default function BottomNav() {
   const [isScannerOpen, setIsScannerOpen] = useState(false);
 
   const navItems = [
-    { name: "Accueil", href: "/", icon: Home },
-    { name: "Produits", href: "/produits", icon: Package },
+    { name: "Accueil", href: "/vigiprix/dashboard", icon: Home },
+    { name: "Produits", href: "/vigiprix/produits", icon: Package },
     { name: "Scan", href: "#", icon: ScanBarcode, isAction: true },
-    { name: "Historique", href: "/historique", icon: Clock },
-    { name: "Paramètres", href: "/parametres", icon: Settings },
+    { name: "Historique", href: "/vigiprix/historique", icon: Clock },
+    { name: "Paramètres", href: "/vigiprix/parametres", icon: Settings },
   ];
 
   return (

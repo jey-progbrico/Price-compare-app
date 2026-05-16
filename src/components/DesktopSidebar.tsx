@@ -63,24 +63,24 @@ export default function DesktopSidebar() {
   }, [canManageStore, supabase]);
 
   const baseMenu = [
-    { href: "/", label: "Dashboard", icon: LayoutDashboard },
-    { href: "/produits", label: "Catalogue", icon: Package },
-    { href: "/historique", label: "Historique", icon: History },
-    { href: "/activites", label: "Activités", icon: Activity },
+    { href: "/vigiprix/dashboard", label: "Dashboard", icon: LayoutDashboard },
+    { href: "/vigiprix/produits", label: "Catalogue", icon: Package },
+    { href: "/vigiprix/historique", label: "Historique", icon: History },
+    { href: "/vigiprix/activites", label: "Activités", icon: Activity },
   ];
 
   const adminMenu = [
-    { href: "/import-produits", label: "Import Excel", icon: FileSpreadsheet },
-    { href: "/support", label: "Support Admin", icon: MessageSquare },
+    { href: "/vigiprix/import-produits", label: "Import Excel", icon: FileSpreadsheet },
+    { href: "/vigiprix/support", label: "Support Admin", icon: MessageSquare },
   ];
 
   const storeManagerMenu = [
-    { href: "/import-produits", label: "Import Excel", icon: FileSpreadsheet },
-    { href: "/support", label: "Support", icon: MessageSquare },
+    { href: "/vigiprix/import-produits", label: "Import Excel", icon: FileSpreadsheet },
+    { href: "/vigiprix/support", label: "Support", icon: MessageSquare },
   ];
 
   const settingsMenu = [
-    { href: "/parametres", label: "Paramètres", icon: Settings },
+    { href: "/vigiprix/parametres", label: "Paramètres", icon: Settings },
   ];
 
   // Construction dynamique du menu selon les capacités
@@ -104,7 +104,7 @@ export default function DesktopSidebar() {
           </div>
           <div>
             <h1 className="text-xl font-black text-white tracking-tighter">VigiPrix</h1>
-            <p className="text-[10px] font-bold text-neutral-500 uppercase tracking-[0.2em]">Enterprise v7.22</p>
+            <p className="text-[10px] font-bold text-neutral-500 uppercase tracking-[0.2em]">Module Actif</p>
           </div>
         </div>
       </div>
@@ -112,7 +112,7 @@ export default function DesktopSidebar() {
       {/* Nav */}
       <nav className="flex-1 px-4 space-y-1">
         {displayItems.map((item) => {
-          const isActive = pathname === item.href || (item.href !== "/" && pathname.startsWith(item.href));
+          const isActive = pathname === item.href || (item.href !== "/vigiprix/dashboard" && pathname.startsWith(item.href));
           return (
             <Link 
               key={item.href}
@@ -133,20 +133,23 @@ export default function DesktopSidebar() {
               <span className="text-sm font-bold tracking-tight relative z-10">{item.label}</span>
               
               {/* Badge Support Admin */}
-              {item.href === "/support" && unreadCount > 0 && (
+              {item.href === "/vigiprix/support" && unreadCount > 0 && (
                 <div className="ml-auto bg-red-600 text-white text-[10px] font-black px-2 py-0.5 rounded-full shadow-lg shadow-red-600/20">
                   {unreadCount}
                 </div>
               )}
 
-              {isActive && item.href !== "/support" && <div className="ml-auto w-1.5 h-1.5 rounded-full bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.5)]" />}
+              {isActive && item.href !== "/vigiprix/support" && <div className="ml-auto w-1.5 h-1.5 rounded-full bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.5)]" />}
             </Link>
           );
         })}
       </nav>
 
-      {/* Footer Info */}
-      <div className="p-6 border-t border-neutral-900">
+      {/* Footer Info & Retour Hub */}
+      <div className="p-6 border-t border-neutral-900 space-y-4">
+        <Link href="/modules" className="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl border border-neutral-800 text-xs font-bold text-neutral-400 hover:bg-white/5 hover:text-white transition-colors">
+          Retour Hub VigiSuite
+        </Link>
         <div className="bg-neutral-900/50 rounded-2xl p-4 border border-neutral-800/30">
           <div className="flex items-center gap-3 mb-2">
             <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />

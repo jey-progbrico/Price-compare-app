@@ -29,7 +29,7 @@ export default function LoginPage() {
         throw authError;
       }
 
-      router.push("/");
+      router.push("/modules");
       router.refresh();
     } catch (err: any) {
       setError(err.message || "Une erreur est survenue lors de la connexion.");
