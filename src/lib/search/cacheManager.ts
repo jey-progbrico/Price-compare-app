@@ -24,14 +24,19 @@ const STALE_TTL_HOURS = parseInt(process.env.CACHE_STALE_HOURS || "720"); // 30 
  */
 export async function checkCache(
   ean: string,
-  ttlHours: number = DEFAULT_TTL_HOURS
+  ttlHours: number = DEFAULT_TTL_HOURS,
+  storeId?: string | null
 ): Promise<SearchResult[]> {
   try {
-    const { data, error } = await supabase
-      .from("cache_prix")
-      .select("*")
-      .eq("ean", ean)
-      .order("updated_at", { ascending: false });
+    let query = supabase.from("cache_prix").select("*").eq("ean", ean);
+    
+    if (storeId) {
+      query = query.eq("store_id", storeId);
+    } else {
+      query = query.is("store_id", null);
+    }
+
+    const { data, error } = await query.order("updated_at", { ascending: false });
 
     if (error) {
       console.error("[CacheManager] checkCache error:", error.message);
@@ -45,7 +50,6 @@ export async function checkCache(
     return data
       .filter((entry: CacheEntry) => {
         const updatedAt = new Date(entry.updated_at).getTime();
-        // On garde les entrées dans le TTL, qu'elles aient un prix ou non
         return updatedAt >= cutoff;
       })
       .map(entryToSearchResult);
@@ -59,13 +63,17 @@ export async function checkCache(
  * Retourne TOUTES les entrées pour un EAN, même expirées (stale).
  * Utilisé pour l'affichage immédiat "anciens résultats" pendant la recherche live.
  */
-export async function getStaleResults(ean: string): Promise<SearchResult[]> {
+export async function getStaleResults(ean: string, storeId?: string | null): Promise<SearchResult[]> {
   try {
-    const { data, error } = await supabase
-      .from("cache_prix")
-      .select("*")
-      .eq("ean", ean)
-      .order("updated_at", { ascending: false });
+    let query = supabase.from("cache_prix").select("*").eq("ean", ean);
+
+    if (storeId) {
+      query = query.eq("store_id", storeId);
+    } else {
+      query = query.is("store_id", null);
+    }
+
+    const { data, error } = await query.order("updated_at", { ascending: false });
 
     if (error || !data) return [];
 
@@ -109,7 +117,8 @@ export async function hasCachedResults(ean: string): Promise<boolean> {
  */
 export async function saveResults(
   ean: string,
-  results: SearchResult[]
+  results: SearchResult[],
+  storeId?: string | null
 ): Promise<void> {
   if (results.length === 0) return;
 
@@ -176,6 +185,7 @@ export async function saveResults(
       last_searched_at: now,
       reliability_score: newPrix !== null ? 1.0 : 0.5,
       updated_at: now,
+      store_id: storeId || null
     };
   });
 
@@ -183,7 +193,7 @@ export async function saveResults(
     try {
       const { error } = await supabase
         .from("cache_prix")
-        .upsert(upsert, { onConflict: "ean,enseigne" });
+        .upsert(upsert, { onConflict: "ean,enseigne,store_id" });
 
       if (error) {
         // Si la colonne prix_status n'existe pas encore, retry sans elle
@@ -191,7 +201,7 @@ export async function saveResults(
           const { prix_status, ...upsertWithoutStatus } = upsert;
           const { error: retryError } = await supabase
             .from("cache_prix")
-            .upsert(upsertWithoutStatus, { onConflict: "ean,enseigne" });
+            .upsert(upsertWithoutStatus, { onConflict: "ean,enseigne,store_id" });
           if (retryError) {
             console.error(
               `[CacheManager] upsert retry error for ${upsert.enseigne}:`,
@@ -233,6 +243,7 @@ export async function saveManualPrice(
   enseigne: string,
   lien: string,
   prix: number,
+  storeId?: string | null,
   titre?: string
 ): Promise<void> {
   const now = new Date().toISOString();
@@ -260,6 +271,7 @@ export async function saveManualPrice(
     last_success_at: now,
     reliability_score: 1.0,
     updated_at: now,
+    store_id: storeId || null
   };
 
   // Ajouter prix_status si colonne disponible
@@ -274,7 +286,7 @@ export async function saveManualPrice(
   try {
     const { error } = await supabase
       .from("cache_prix")
-      .upsert(upsert, { onConflict: "ean,enseigne" });
+      .upsert(upsert, { onConflict: "ean,enseigne,store_id" });
 
     if (error) {
       // Retry sans prix_status si colonne manquante
@@ -282,7 +294,7 @@ export async function saveManualPrice(
         const { prix_status, ...withoutStatus } = upsert as Record<string, unknown> & { prix_status?: string };
         const { error: retryError } = await supabase
           .from("cache_prix")
-          .upsert(withoutStatus, { onConflict: "ean,enseigne" });
+          .upsert(withoutStatus, { onConflict: "ean,enseigne,store_id" });
         if (retryError) throw new Error(retryError.message);
       } else {
         throw new Error(error.message);

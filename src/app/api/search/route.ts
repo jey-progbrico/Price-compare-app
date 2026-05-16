@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { runSearch } from "@/lib/search/searchOrchestrator";
-import { supabase } from "@/lib/supabase";
+import { createClient } from "@/lib/supabase/server";
+import { getServerProfile } from "@/lib/auth-utils";
 import type { ProductInfo } from "@/lib/search/types";
 
 export const dynamic = "force-dynamic";
@@ -13,6 +14,7 @@ export const dynamic = "force-dynamic";
  * Le client décide comment afficher les résultats sans prix.
  */
 export async function GET(request: Request) {
+  const supabase = await createClient();
   const { searchParams } = new URL(request.url);
   const ean = searchParams.get("ean");
   const forceRefresh = searchParams.get("force") === "1";
@@ -45,9 +47,13 @@ export async function GET(request: Request) {
       console.warn("[Search] Impossible de charger les infos produit:", dbErr.message);
     }
 
-    // 2. Recherche complète
+    // 2. Récupérer le store_id pour l'isolation du cache
+    const { profile } = await getServerProfile(supabase);
+
+    // 3. Recherche complète
     const { results, stats } = await runSearch(product, {
       force_refresh: forceRefresh,
+      store_id: profile?.store_id
     });
 
     // 3. Formater la réponse — TOUS les résultats (avec et sans prix)

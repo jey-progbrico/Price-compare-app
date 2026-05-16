@@ -61,7 +61,7 @@ export async function runSearch(
   // ─── ÉTAPE 1 : Cache Supabase (URLs connues) ──────────────────────────────
 
   if (!forceRefresh) {
-    const cachedResults = await checkCache(product.ean, ttlHours);
+    const cachedResults = await checkCache(product.ean, ttlHours, options.store_id);
     if (cachedResults.length > 0) {
       const withCacheSource = cachedResults.map(r => ({ ...r, source: "cache" as const }));
       emit({ type: "cache_hit", results: withCacheSource, source: "cache" });
@@ -104,7 +104,7 @@ export async function runSearch(
 
   const liveResults = allResults.filter(r => r.source !== "cache");
   if (liveResults.length > 0) {
-    saveResults(product.ean, liveResults).catch(err => console.error("[PIPELINE] Erreur cache :", err.message));
+    saveResults(product.ean, liveResults, options.store_id).catch(err => console.error("[PIPELINE] Erreur cache :", err.message));
   }
 
   // ─── ÉTAPE 4 : Fin ───────────────────────────────────────────────────────

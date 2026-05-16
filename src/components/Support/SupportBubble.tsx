@@ -49,7 +49,10 @@ export default function SupportBubble() {
         if (!conv) {
           const { data: newConv, error: createError } = await supabase
             .from("support_conversations")
-            .insert({ user_id: profile.id })
+            .insert({ 
+              user_id: profile.id,
+              store_id: profile.store_id
+            })
             .select()
             .single();
           if (createError) throw createError;

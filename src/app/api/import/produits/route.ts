@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
+import { getServerProfile } from "@/lib/auth-utils";
 import * as XLSX from "xlsx";
 
 import { Product } from "@/types/database";
@@ -99,19 +100,33 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Validation échouée", details: errors }, { status: 400 });
     }
 
-    // 4. Upsert massif (basé sur numero_ean)
+    // 4. Récupérer le store_id de l'utilisateur
+    const { profile } = await getServerProfile(supabase);
+    if (!profile) {
+      return NextResponse.json({ error: "Profil utilisateur non trouvé." }, { status: 401 });
+    }
+
+    // 5. Préparation finale des données avec store_id
+    const finalData = cleanData.map(p => ({
+      ...p,
+      store_id: profile.store_id
+    }));
+
+    // 6. Upsert massif (basé sur EAN + Store pour le multi-tenant)
     const { error: upsertError } = await supabase
       .from("produits")
-      .upsert(cleanData, { onConflict: "numero_ean" });
+      .upsert(finalData, { onConflict: "numero_ean,store_id" });
 
     if (upsertError) throw upsertError;
 
-    // 5. Journaliser l'activité
+    // 7. Journaliser l'activité
     await supabase.from("historique_activites").insert([
       {
         type_action: "import_produits",
+        store_id: profile.store_id,
+        user_id: profile.id,
         details: {
-          count: cleanData.length,
+          count: finalData.length,
           fileName: file.name
         }
       }

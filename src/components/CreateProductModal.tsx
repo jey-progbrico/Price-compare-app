@@ -71,8 +71,8 @@ export default function CreateProductModal({ isOpen, onClose, initialRayon, onSu
         throw new Error("Format EAN invalide (8 à 14 chiffres)");
       }
 
-      // 2. Insertion
-      const { data, error: insertError } = await supabase.from("produits").insert([{
+      // 2. Upsert (Mise à jour si EAN + store_id existe déjà)
+      const { data, error: upsertError } = await supabase.from("produits").upsert([{
         description_produit: formData.description_produit,
         numero_ean: formData.numero_ean,
         marque: formData.marque,
@@ -82,11 +82,10 @@ export default function CreateProductModal({ isOpen, onClose, initialRayon, onSu
         code_interne: formData.code_interne || null,
         store_id: profile?.store_id,
         updated_at: new Date().toISOString()
-      }]).select().single();
+      }], { onConflict: "numero_ean,store_id" }).select().single();
 
-      if (insertError) {
-        if (insertError.code === "23505") throw new Error("Ce code EAN existe déjà dans le catalogue.");
-        throw insertError;
+      if (upsertError) {
+        throw upsertError;
       }
 
       // 3. Log Activité

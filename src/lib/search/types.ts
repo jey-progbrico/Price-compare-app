@@ -128,4 +128,5 @@ export interface SearchOptions {
   force_refresh?: boolean; // Ignorer le cache existant
   max_results?: number;   // Nombre max de résultats à retourner
   min_score?: number;     // Score de pertinence minimum (0–100, défaut: 20)
+  store_id?: string | null; // ID du store pour l'isolation du cache
 }
