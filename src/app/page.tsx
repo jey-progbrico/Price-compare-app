@@ -35,18 +35,16 @@ export default async function Home() {
   const supabase = await createClient();
 
   const [
-    { count: totalProduits },
-    { count: totalReleves },
-    { data: rawRayons },
+    { data: stats },
     { data: activities }
   ] = await Promise.all([
-    supabase.from("produits").select("*", { count: "exact", head: true }),
-    supabase.from("releves_prix").select("*", { count: "exact", head: true }),
-    supabase.from("produits").select("rayon").not("rayon", "is", null),
+    supabase.rpc("get_dashboard_stats"),
     supabase.from("historique_activites").select("*, profiles(display_name, email)").order("created_at", { ascending: false }).limit(8)
   ]);
 
-  const totalRayons = new Set((rawRayons as RayonRow[] | null)?.map(r => r.rayon) || []).size;
+  const totalProduits = stats?.total_produits || 0;
+  const totalReleves = stats?.total_releves || 0;
+  const totalRayons = stats?.total_rayons || 0;
   const typedActivities = (activities as ActivityRow[] | null) || [];
 
   // 3. Récupérer le rôle de l'utilisateur

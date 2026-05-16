@@ -4,12 +4,13 @@ import { useState, useCallback } from "react";
 import CompareButton from "@/components/CompareButton";
 import ManualPriceModal from "./ManualPriceModal";
 import { PenLine } from "lucide-react";
-import { Product } from "@/types/database";
+import { Product, PriceLog } from "@/types/database";
 
 interface Props {
   ean: string;
   internalPrice: number | null;
   produit: Product | null;
+  initialReleves: PriceLog[];
 }
 
 /**
@@ -17,7 +18,7 @@ interface Props {
  * Gère le CompareButton (SSE) + la modale de saisie manuelle.
  * Client component car il a besoin de l'état React.
  */
-export default function ProductSearchSection({ ean, internalPrice, produit }: Props) {
+export default function ProductSearchSection({ ean, internalPrice, produit, initialReleves }: Props) {
   const [modalOpen, setModalOpen] = useState(false);
   const [modalData, setModalData] = useState<{
     enseigne: string;
@@ -59,6 +60,7 @@ export default function ProductSearchSection({ ean, internalPrice, produit }: Pr
         isUnknown={false}
         onManualPriceClick={handleManualPriceClick}
         produit={produit}
+        initialReleves={initialReleves}
       />
 
       {/* Modale saisie manuelle */}

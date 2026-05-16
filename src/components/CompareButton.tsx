@@ -401,23 +401,30 @@ export default function CompareButton({
   isUnknown,
   onManualPriceClick,
   produit,
+  initialReleves = [],
 }: {
   ean: string;
   internalPrice?: number | null;
   isUnknown: boolean;
   onManualPriceClick?: (enseigne: string, lien: string, titre: string) => void;
   produit?: Product | null;
+  initialReleves?: PriceLog[];
 }) {
   const { isStandardUser } = useProfile();
-  const [phase, setPhase] = useState<"idle" | "done">("idle");
+  const [phase, setPhase] = useState<"idle" | "done">(initialReleves.length > 0 ? "done" : "idle");
   const [results, setResults] = useState<SearchResult[]>([]);
-  const [releves, setReleves] = useState<PriceLog[]>([]);
+  const [releves, setReleves] = useState<PriceLog[]>(initialReleves);
   
   // ─── Initialisation : chargement des données ────────────────────────────
 
   useEffect(() => {
     if (ean) {
       localStorage.setItem("vigi_current_ean", ean);
+    }
+
+    // Si on a déjà les relevés via SSR, on ne refait pas le fetch
+    if (initialReleves && initialReleves.length > 0) {
+      return;
     }
 
     const fetchData = async () => {
@@ -436,7 +443,7 @@ export default function CompareButton({
     };
 
     fetchData();
-  }, [ean]);
+  }, [ean, initialReleves]);
 
   const searchDesignation = `${produit?.description_produit || ""} ${produit?.marque || ""}`.trim();
 

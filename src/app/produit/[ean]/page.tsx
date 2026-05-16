@@ -29,6 +29,13 @@ export default async function ProductPage({
     console.error(error);
   }
 
+  // Fetch price reports (releves) in SSR to avoid client-side delay
+  const { data: initialReleves } = await supabase
+    .from("releves_prix")
+    .select("*, profiles(display_name, email)")
+    .eq("ean", ean)
+    .order("created_at", { ascending: false });
+
   const isUnknown = !produit;
   const internalPrice = produit?.prix_vente ? Number(produit.prix_vente) : null;
 
@@ -82,6 +89,7 @@ export default async function ProductPage({
                 ean={ean} 
                 internalPrice={internalPrice} 
                 produit={produit}
+                initialReleves={initialReleves || []}
               />
             </>
           )}

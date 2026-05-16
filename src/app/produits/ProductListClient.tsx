@@ -34,6 +34,9 @@ export default function ProductListClient({
 
   // Group products hierarchically: Category -> Brand -> Products
   const hierarchicalProducts = useMemo(() => {
+    // OPTIMISATION : Ne calculer l'arbre que si on va l'afficher (pas de recherche et vue hiérarchique active)
+    if (!isHierarchicalView || query) return [];
+
     const tree: Record<string, Record<string, Product[]>> = {};
     
     filteredProducts.forEach(p => {
@@ -67,7 +70,7 @@ export default function ProductListClient({
             products: prods
           }))
       }));
-  }, [filteredProducts]);
+  }, [filteredProducts, isHierarchicalView, query]);
 
   const handleSearchExactEAN = (e: React.FormEvent) => {
     e.preventDefault();

@@ -10,15 +10,11 @@ export default async function RayonPage({ params }: { params: Promise<{ slug: st
   
   console.log(`[NAV DEBUG] Slug rayon reçu : ${slug}`);
 
-  // 1. Récupérer tous les rayons pour trouver le match exact avec le slug
-  const { data: allRayons } = await supabase
-    .from("produits")
-    .select("rayon")
-    .not("rayon", "is", null);
-
-  const rayonsUniques = Array.from(new Set((allRayons as RayonRow[] | null)?.map(r => r.rayon || "") || []));
+  // 1. Récupérer l'arbre de navigation complet via RPC (Résolution 1 étape)
+  const { data: treeData } = await supabase.rpc('get_navigation_tree');
+  const tree = (treeData as { rayon_name: string, group_name: string }[] | null) || [];
   
-  // Fonction de normalisation pour comparaison
+  // Fonction de normalisation pour comparaison (CONSERVÉE À 100%)
   const normalize = (str: string) => 
     decodeURIComponent(str)
       .toLowerCase()
@@ -26,28 +22,20 @@ export default async function RayonPage({ params }: { params: Promise<{ slug: st
       .normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 
   // Trouver le rayon qui correspond au slug
+  const rayonsUniques = Array.from(new Set(tree.map(t => t.rayon_name)));
   const rayonName = rayonsUniques.find(r => 
     normalize(r) === normalize(slug)
   ) || decodeURIComponent(slug).replace(/-/g, ' ');
 
   console.log(`[NAV DEBUG] Rayon converti : "${rayonName}"`);
 
-  // 2. Récupérer les groupes produits uniques pour ce rayon exact
-  const { data: groupes, error } = await supabase
-    .from("produits")
-    .select("groupe_produit")
-    .eq("rayon", rayonName)
-    .not("groupe_produit", "is", null)
-    .order("groupe_produit", { ascending: true });
-
-  if (error) {
-    console.error(error);
-  }
-
-  const uniqueGroupes = Array.from(new Set((groupes as GroupeRow[] | null)?.map(g => g.groupe_produit || "") || [])).map(name => ({
-    name,
-    slug: encodeURIComponent(name.toLowerCase().replace(/\s+/g, '-'))
-  }));
+  // 2. Extraire les groupes produits pour ce rayon depuis l'arbre déjà chargé
+  const uniqueGroupes = tree
+    .filter(t => t.rayon_name === rayonName)
+    .map(t => ({
+      name: t.group_name,
+      slug: encodeURIComponent(t.group_name.toLowerCase().replace(/\s+/g, '-'))
+    }));
 
   return (
     <main className="min-h-full bg-[#0a0a0c] p-4 sm:p-6 pt-12 pb-24 space-y-8 animate-in slide-in-from-right-4 duration-500">

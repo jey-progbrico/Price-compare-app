@@ -31,7 +31,8 @@ export default function DesktopSidebar() {
     const fetchUnread = async () => {
       const { data, error } = await supabase
         .from("support_conversations")
-        .select("unread_count_admin");
+        .select("unread_count_admin")
+        .gt("unread_count_admin", 0);
       
       if (!error) {
         const total = data.reduce((acc, conv) => acc + (conv.unread_count_admin || 0), 0);
@@ -39,19 +40,27 @@ export default function DesktopSidebar() {
       }
     };
 
-    fetchUnread();
+    let channel: any = null;
 
-    const channel = supabase
-      .channel("sidebar_support_sync")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "support_conversations" },
-        () => fetchUnread()
-      )
-      .subscribe();
+    // OPTIMISATION : Délai d'initialisation pour libérer le chargement principal
+    const timer = setTimeout(() => {
+      fetchUnread();
+
+      channel = supabase
+        .channel("sidebar_support_sync")
+        .on(
+          "postgres_changes",
+          { event: "*", schema: "public", table: "support_conversations" },
+          () => fetchUnread()
+        )
+        .subscribe();
+    }, 2000);
 
     return () => {
-      supabase.removeChannel(channel);
+      clearTimeout(timer);
+      if (channel) {
+        supabase.removeChannel(channel);
+      }
     };
   }, [isAdmin, supabase]);
 

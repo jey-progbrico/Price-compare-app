@@ -33,27 +33,20 @@ function ProduitsPageContent() {
         // Recherche globale
         const { data, error } = await supabase
           .from("produits")
-          .select("*")
+          .select("numero_ean, description_produit, marque, prix_vente, code_interne, categorie, rayon")
           .or(`description_produit.ilike.%${query}%,numero_ean.ilike.%${query}%,marque.ilike.%${query}%,groupe_produit.ilike.%${query}%,rayon.ilike.%${query}%,code_interne.ilike.%${query}%`)
           .limit(100);
         
         if (data) setProducts(data as Product[]);
       } else {
-        // Liste des rayons
-        const { data } = await supabase
-          .from("produits")
-          .select("rayon")
-          .not("rayon", "is", null)
-          .order("rayon", { ascending: true });
+        // Liste des rayons optimisée via RPC
+        const { data, error } = await supabase.rpc('get_unique_rayons');
         
-        if (data) {
-          const rows = data as RayonRow[];
-          const unique = Array.from(new Set(rows.map(r => r.rayon)))
-            .filter((name): name is string => !!name)
-            .map(name => ({
-              name: name,
-              slug: encodeURIComponent(name.toLowerCase().replace(/\s+/g, '-'))
-            }));
+        if (data && !error) {
+          const unique = (data as { rayon_name: string }[]).map(row => ({
+            name: row.rayon_name,
+            slug: encodeURIComponent(row.rayon_name.toLowerCase().replace(/\s+/g, '-'))
+          }));
           setRayons(unique);
         }
       }

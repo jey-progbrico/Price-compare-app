@@ -95,25 +95,29 @@ export default function SupportBubble() {
   useEffect(() => {
     if (!profile) return;
 
-    // Subscription pour les changements de la conversation (badges)
-    const convChannel = supabase
-      .channel(`support_conv_sync_${profile.id}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "support_conversations",
-          filter: `user_id=eq.${profile.id}`,
-        },
-        (payload) => {
-          setConversation(payload.new as SupportConversation);
-        }
-      )
-      .subscribe();
+    let convChannel: any = null;
+    let msgChannel: any = null;
+
+    // OPTIMISATION : Ne s'abonner au badge de notif qu'après 3 secondes
+    const timer = setTimeout(() => {
+      convChannel = supabase
+        .channel(`support_conv_sync_${profile.id}`)
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "support_conversations",
+            filter: `user_id=eq.${profile.id}`,
+          },
+          (payload) => {
+            setConversation(payload.new as SupportConversation);
+          }
+        )
+        .subscribe();
+    }, 3000);
 
     // Subscription pour les messages (si ouvert)
-    let msgChannel: any = null;
     if (isOpen && conversation?.id) {
       msgChannel = supabase
         .channel(`support_messages:${conversation.id}`)
@@ -128,7 +132,6 @@ export default function SupportBubble() {
           (payload) => {
             const newMsg = payload.new as SupportMessage;
             setMessages((prev) => [...prev, newMsg]);
-            // Marquer comme lu si c'est un admin qui écrit et que le chat est ouvert
             if (newMsg.is_admin) {
                setConversation(prev => prev ? { ...prev, unread_count_user: 0 } : null);
                supabase
@@ -143,7 +146,8 @@ export default function SupportBubble() {
     }
 
     return () => {
-      supabase.removeChannel(convChannel);
+      clearTimeout(timer);
+      if (convChannel) supabase.removeChannel(convChannel);
       if (msgChannel) supabase.removeChannel(msgChannel);
     };
   }, [profile, isOpen, conversation?.id, supabase]);

@@ -12,36 +12,35 @@ export default async function GroupeProduitsPage({ params }: { params: Promise<{
 
   console.log(`[NAV DEBUG] Slug reçu : rayon=${slug}, groupe=${groupeSlug}`);
 
-  // 1. Récupérer les noms exacts en base de données pour éviter les erreurs d'accents/casse
-  const { data: allData } = await supabase
-    .from("produits")
-    .select("rayon, groupe_produit")
-    .not("rayon", "is", null)
-    .not("groupe_produit", "is", null);
+  // 1. Résolution des noms exacts via un seul appel RPC (Arbre complet)
+  const { data: treeData } = await supabase.rpc('get_navigation_tree');
+  const tree = (treeData as { rayon_name: string, group_name: string }[] | null) || [];
 
-  const rows = (allData as (RayonRow & GroupeRow)[]) || [];
-
-  // Fonction de normalisation pour comparaison
+  // Fonction de normalisation pour comparaison (CONSERVÉE)
   const normalize = (str: string) => 
     decodeURIComponent(str)
       .toLowerCase()
       .replace(/[\s-]/g, '')
-      .normalize("NFD").replace(/[\u0300-\u036f]/g, ""); // Enlever accents
+      .normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 
-  const rayonName = Array.from(new Set(rows.map(r => r.rayon || ""))).find(r => 
+  // Résolution du Rayon
+  const rayonName = Array.from(new Set(tree.map(t => t.rayon_name))).find(r => 
     normalize(r) === normalize(slug)
   ) || decodeURIComponent(slug).replace(/-/g, ' ');
 
-  const groupeName = Array.from(new Set(rows.filter(r => r.rayon === rayonName).map(r => r.groupe_produit || ""))).find(g => 
-    normalize(g) === normalize(groupeSlug)
-  ) || decodeURIComponent(groupeSlug).replace(/-/g, ' ');
+  // Résolution du Groupe (filtré par le rayon résolu)
+  const groupeName = tree
+    .filter(t => t.rayon_name === rayonName)
+    .map(t => t.group_name)
+    .find(g => normalize(g) === normalize(groupeSlug)) 
+    || decodeURIComponent(groupeSlug).replace(/-/g, ' ');
 
   console.log(`[NAV DEBUG] Valeurs converties : rayon="${rayonName}", groupe="${groupeName}"`);
 
   // 2. Récupérer les produits pour ce groupe et ce rayon exacts
   const { data: produits, error } = await supabase
     .from("produits")
-    .select("description_produit, numero_ean, marque, prix_vente, devise, reference_fabricant, groupe_produit, categorie, rayon")
+    .select("description_produit, numero_ean, marque, prix_vente, code_interne")
     .eq("rayon", rayonName)
     .eq("groupe_produit", groupeName)
     .order("description_produit", { ascending: true });
