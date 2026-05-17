@@ -449,13 +449,21 @@ export default function ParametresPage() {
               </div>
             </div>
             
-            <button 
-              onClick={handleLogout}
-              className="px-8 py-4 bg-red-600/5 hover:bg-red-600/10 border border-red-900/20 text-red-500 font-black text-xs uppercase tracking-widest rounded-2xl transition-all active:scale-95 flex items-center gap-3"
-            >
-              <LogOut className="w-4 h-4" />
-              Déconnexion
-            </button>
+            <div className="flex flex-col sm:flex-row gap-3 mt-4 sm:mt-0 w-full sm:w-auto">
+              <Link 
+                href="/modules"
+                className="px-6 py-4 bg-neutral-900/50 hover:bg-neutral-800 border border-neutral-800 text-neutral-300 font-black text-xs uppercase tracking-widest rounded-2xl transition-all active:scale-95 flex items-center justify-center gap-3"
+              >
+                Retour Hub VigiSuite
+              </Link>
+              <button 
+                onClick={handleLogout}
+                className="px-6 py-4 bg-red-600/5 hover:bg-red-600/10 border border-red-900/20 text-red-500 font-black text-xs uppercase tracking-widest rounded-2xl transition-all active:scale-95 flex items-center justify-center gap-3"
+              >
+                <LogOut className="w-4 h-4" />
+                Déconnexion
+              </button>
+            </div>
           </div>
 
           <div className="p-8 bg-neutral-900/20 border-t border-neutral-900/50">
